@@ -17,6 +17,8 @@
  *******************************************************************************/
 package org.osgi.test.cases.cm.junit;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.HashSet;
@@ -24,7 +26,11 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Set;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.Constants;
 import org.osgi.service.cm.Configuration;
@@ -38,12 +44,12 @@ import org.osgi.service.coordinator.Coordination;
 import org.osgi.service.coordinator.Coordinator;
 import org.osgi.service.permissionadmin.PermissionAdmin;
 import org.osgi.service.permissionadmin.PermissionInfo;
-import org.osgi.test.support.compatibility.DefaultTestBundleControl;
 
 /**
  * @author Carsten Ziegeler, Adobe, Testing CM + Coordinator
  */
-public class CMCoordinationTestCase extends DefaultTestBundleControl {
+public class CMCoordinationTestCase extends CMTestSupport {
+
 
 	private long				SIGNAL_WAITING_TIME;
 
@@ -53,14 +59,15 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 
 	private Set<String>								existingConfigs;
 
-	protected void setUp() throws Exception {
+	@BeforeEach
+	public void setUp() throws Exception {
 		SIGNAL_WAITING_TIME = getLongProperty(
 				"org.osgi.test.cases.cm.signal_waiting_time", 4000);
 	    assignCm();
 
 		if (System.getSecurityManager() != null) {
 			permAdmin = getService(PermissionAdmin.class);
-			setAllPermissionBundle = getContext().installBundle(
+			setAllPermissionBundle = context.installBundle(
 					getWebServer() + "setallpermission.jar");
 		}
 
@@ -75,7 +82,8 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
         }
 	}
 
-	protected void tearDown() throws Exception {
+	@AfterEach
+	public void tearDown() throws Exception {
 		resetPermissions();
 		cleanCM(existingConfigs);
 		if (this.setAllPermissionBundle != null) {
@@ -94,7 +102,7 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 			return;
 		try {
 			if (this.setAllPermissionBundle == null)
-				this.setAllPermissionBundle = getContext().installBundle(
+				this.setAllPermissionBundle = context.installBundle(
 						getWebServer() + "setallpermission.jar");
 			this.setAllPermissionBundle.start();
 			this.setAllPermissionBundle.stop();
@@ -180,6 +188,7 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 	 * @throws Exception
 	 * @since 1.6
 	 */
+	@Test
 	public void testListeners() throws Exception {
 		// start a coordination
 		final Coordinator c = this.getService(Coordinator.class);
@@ -227,46 +236,43 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 			final Configuration conf = this.cm.getConfiguration(pid);
 			conf.update(props);
 
-			assertEquals(1, syncList.size());
-			assertEquals(ConfigurationEvent.CM_UPDATED,
-					syncList.get(0).getType());
+			assertThat(syncList).hasSize(1);
+			assertThat(syncList.get(0).getType()).isEqualTo(ConfigurationEvent.CM_UPDATED);
 
-			assertEquals(0, plainList.size());
+			assertThat(plainList).hasSize(0);
 
 			sleep();
-			assertEquals(0, plainList.size());
+			assertThat(plainList).hasSize(0);
 
 			// update configuration
 			props.put("key2", "value2");
 			conf.update(props);
 
-			assertEquals(2, syncList.size());
-			assertEquals(ConfigurationEvent.CM_UPDATED,
-					syncList.get(1).getType());
-			assertEquals(0, plainList.size());
+			assertThat(syncList).hasSize(2);
+			assertThat(syncList.get(1).getType()).isEqualTo(ConfigurationEvent.CM_UPDATED);
+			assertThat(plainList).hasSize(0);
 
 			sleep();
-			assertEquals(0, plainList.size());
+			assertThat(plainList).hasSize(0);
 
 			// delete configuration
 			conf.delete();
-			assertEquals(3, syncList.size());
-			assertEquals(ConfigurationEvent.CM_DELETED,
-					syncList.get(2).getType());
-			assertEquals(0, plainList.size());
+			assertThat(syncList).hasSize(3);
+			assertThat(syncList.get(2).getType()).isEqualTo(ConfigurationEvent.CM_DELETED);
+			assertThat(plainList).hasSize(0);
 
 			sleep();
-			assertEquals(0, plainList.size());
+			assertThat(plainList).hasSize(0);
 		} finally {
 			coord.end();
 		}
 
 		// wait and verify listener
 		sleep();
-		assertEquals(3, plainList.size());
-		assertEquals(ConfigurationEvent.CM_UPDATED, plainList.get(0).getType());
-		assertEquals(ConfigurationEvent.CM_UPDATED, plainList.get(1).getType());
-		assertEquals(ConfigurationEvent.CM_DELETED, plainList.get(2).getType());
+		assertThat(plainList).hasSize(3);
+		assertThat(plainList.get(0).getType()).isEqualTo(ConfigurationEvent.CM_UPDATED);
+		assertThat(plainList.get(1).getType()).isEqualTo(ConfigurationEvent.CM_UPDATED);
+		assertThat(plainList.get(2).getType()).isEqualTo(ConfigurationEvent.CM_DELETED);
 
 	}
 
@@ -278,6 +284,7 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 	// Configuration exists before ManagedService is registered. No update(null)
 	// use cfg-dictionary directly
 
+	@Test
 	public void test_deliver_existing_Configuration_to_later_registered_ManagedService()
 			throws Exception {
 		// start a coordination
@@ -311,14 +318,14 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 					}, msProps);
 
 			sleep();
-			assertEquals(0, events.size());
+			assertThat(events.size()).isEqualTo(0);
 
 			// update configuration
 			props.put("key2", "value2");
 			conf.update(props);
 
 			sleep();
-			assertEquals(0, events.size());
+			assertThat(events.size()).isEqualTo(0);
 		} finally {
 			coord.end();
 		}
@@ -326,11 +333,12 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 		// wait and verify listener
 		sleep();
 
-		assertEquals(1, events.size());
+		assertThat(events).hasSize(1);
 		// last update
-		assertEquals("value2", events.get(0));
+		assertThat(events.get(0)).isEqualTo("value2");
 	}
 
+	@Test
 	public void test_create_managedservice_delete() throws Exception {
 		ConfigurationAdmin cm = getService(ConfigurationAdmin.class);
 		Coordinator c = getService(Coordinator.class);
@@ -369,7 +377,7 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 			// delete configuration
 			conf.delete();
 
-			assertEquals(0, events.size());
+			assertThat(events.size()).isEqualTo(0);
 		} finally {
 			coord.end();
 		}
@@ -377,10 +385,11 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 		// wait and verify listener
 		sleep();
 
-		assertEquals(1, events.size());
-		assertFalse(events.get(0));// no configuration, update with null
+		assertThat(events).hasSize(1);
+		assertThat(events.get(0)).isFalse();// no configuration, update with null
 	}
 
+	@Test
 	public void testCoordinatedConfigurationOnBeforeRegisteredManagedService()
 			throws Exception {
 
@@ -415,7 +424,7 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 			conf.update(props);
 
 			sleep();
-			assertEquals(1, events.size());// update with null because
+			assertThat(events).hasSize(1);// update with null because
 											// registered before coordination
 
 			// update configuration
@@ -423,21 +432,21 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 			conf.update(props);
 
 			sleep();
-			assertEquals(1, events.size());
+			assertThat(events).hasSize(1);
 
 			// delete configuration
 			conf.delete();
 
 			sleep();
-			assertEquals(1, events.size());
+			assertThat(events).hasSize(1);
 		} finally {
 			coord.end();
 		}
 
 		// wait and verify listener
 		sleep();
-		assertEquals(1, events.size());
-		assertFalse(events.get(0));
+		assertThat(events).hasSize(1);
+		assertThat(events.get(0)).isFalse();
 	}
 
 	/**
@@ -455,6 +464,7 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 	 * @throws Exception
 	 * @since 1.6
 	 */
+	@Test
 	public void testManagedService() throws Exception {
 		// start a coordination
 		final Coordinator c = this.getService(Coordinator.class);
@@ -489,20 +499,20 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 			conf.update(props);
 
 			sleep();
-			assertEquals(0, events.size());
+			assertThat(events.size()).isEqualTo(0);
 
 			// update configuration
 			props.put("key2", "value2");
 			conf.update(props);
 
 			sleep();
-			assertEquals(0, events.size());
+			assertThat(events.size()).isEqualTo(0);
 
 			// delete configuration
 			conf.delete();
 
 			sleep();
-			assertEquals(0, events.size());
+			assertThat(events.size()).isEqualTo(0);
 			checkpoint = true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -510,10 +520,10 @@ public class CMCoordinationTestCase extends DefaultTestBundleControl {
 		} finally {
 			coord.end();
 		}
-		assertTrue(checkpoint);
+		assertThat(checkpoint).isTrue();
 		// wait and verify listener
 		sleep();
-		assertEquals(1, events.size());
-		assertFalse(events.get(0));
+		assertThat(events).hasSize(1);
+		assertThat(events.get(0)).isFalse();
 	}
 }

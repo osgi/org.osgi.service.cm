@@ -18,9 +18,9 @@
 package org.osgi.test.cases.cm.junit;
 
 import java.util.Dictionary;
+import java.util.concurrent.Semaphore;
 
 import org.osgi.service.cm.ManagedService;
-import java.util.concurrent.Semaphore;
 
 public class ManagedServiceImpl implements ManagedService {
 	private Dictionary<String,Object>	properties;

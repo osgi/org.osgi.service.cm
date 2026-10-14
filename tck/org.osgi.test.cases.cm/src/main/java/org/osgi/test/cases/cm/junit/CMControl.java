@@ -17,6 +17,9 @@
  *******************************************************************************/
 package org.osgi.test.cases.cm.junit;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.within;
 import static org.osgi.test.cases.cm.shared.Util.singletonDictionary;
 
 import java.io.IOException;
@@ -39,8 +42,13 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.osgi.framework.AdminPermission;
 import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.Constants;
 import org.osgi.framework.InvalidSyntaxException;
@@ -70,16 +78,21 @@ import org.osgi.test.cases.cm.common.SynchronizerImpl;
 import org.osgi.test.cases.cm.shared.ModifyPid;
 import org.osgi.test.cases.cm.shared.Synchronizer;
 import org.osgi.test.cases.cm.shared.Util;
-import org.osgi.test.support.compatibility.DefaultTestBundleControl;
-import org.osgi.test.support.sleep.Sleep;
 
-import junit.framework.AssertionFailedError;
 
 /**
  * @author Ikuo YAMASAKI, NTT Corporation, added many tests.
  * @author Carsten Ziegeler, Adobe, added ConfigAdmin 1.5/1.6 tests
  */
-public class CMControl extends DefaultTestBundleControl {
+public class CMControl extends CMTestSupport {
+
+
+	String				testMethodName;
+
+	@BeforeEach
+	void testMethodName(TestInfo testInfo) {
+		testMethodName = testInfo.getTestMethod().get().getName();
+	}
 	private ConfigurationAdmin cm;
 	private PermissionAdmin permAdmin;
 	private long					SIGNAL_WAITING_TIME;
@@ -218,12 +231,13 @@ public class CMControl extends DefaultTestBundleControl {
 	private static final String neverlandLocation = "http://neverneverland/";
 
 	List<String>				bLocs				= new ArrayList<>();
-	protected void setUp() throws Exception {
+	@BeforeEach
+	public void setUp() throws Exception {
 		SIGNAL_WAITING_TIME = getLongProperty(
 				"org.osgi.test.cases.cm.signal_waiting_time", 4000);
 		// printoutBundleList();
 
-		for (Bundle b : getContext().getBundles()) {
+		for (Bundle b : context.getBundles()) {
 			if (b.getState() != Bundle.UNINSTALLED) {
 			bLocs.add(b.getLocation());
 			}
@@ -236,9 +250,9 @@ public class CMControl extends DefaultTestBundleControl {
 
 		if (System.getSecurityManager() != null) {
 			permAdmin = getService(PermissionAdmin.class);
-			setAllPermissionBundle = getContext().installBundle(
+			setAllPermissionBundle = context.installBundle(
 					getWebServer() + "setallpermission.jar");
-			thisBundle = getContext().getBundle();
+			thisBundle = context.getBundle();
 			thisLocation = thisBundle.getLocation();
 		} else {
 			permissionFlag = true;
@@ -249,13 +263,14 @@ public class CMControl extends DefaultTestBundleControl {
         if (configs != null) {
             for (int i = 0; i < configs.length; i++) {
                 Configuration config = configs[i];
-                // log("setUp() -- Register pre-existing config " + config.getPid());
+                // System.out.println("setUp() -- Register pre-existing config " + config.getPid());
                 existingConfigs.add(config.getPid());
             }
         }
 	}
 
-	protected void tearDown() throws Exception {
+	@AfterEach
+	public void tearDown() throws Exception {
 		resetPermissions();
 		cleanCM(existingConfigs);
 		if (this.setAllPermissionBundle != null) {
@@ -270,7 +285,7 @@ public class CMControl extends DefaultTestBundleControl {
 		ungetService(cm);
 		System.out.println("tearDown()");
 		// this.printoutBundleList();
-		for (Bundle b : getContext().getBundles()) {
+		for (Bundle b : context.getBundles()) {
 			if (!bLocs.contains(b.getLocation())) {
 				b.uninstall();
 			}
@@ -282,7 +297,7 @@ public class CMControl extends DefaultTestBundleControl {
 			return;
 		try {
 			if (this.setAllPermissionBundle == null)
-				this.setAllPermissionBundle = getContext().installBundle(
+				this.setAllPermissionBundle = context.installBundle(
 						getWebServer() + "setallpermission.jar");
 			this.setAllPermissionBundle.start();
 			this.setAllPermissionBundle.stop();
@@ -354,6 +369,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.getProperties()
 	 * @spec Configuration.setBundleLocation(String)
 	 */
+	@Test
 	public void testDeletedConfiguration() throws Exception {
 		String pid = Util.createPid();
 		Configuration conf = null;
@@ -387,7 +403,7 @@ public class CMControl extends DefaultTestBundleControl {
 				 * so if we end up here, somethings wrong
 				 */
 				failException(methods[i].getName(), IllegalStateException.class);
-			} catch (AssertionFailedError e) {
+			} catch (AssertionError e) {
 				throw e;
 			} catch (Throwable e) {
 				/* Check that we got the correct exception */
@@ -410,6 +426,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testGetConfiguration() throws Exception {
 		this.setInappropriatePermission();
 
@@ -432,7 +449,7 @@ public class CMControl extends DefaultTestBundleControl {
              * enabled
              */
             if (System.getSecurityManager() != null) failException(message, SecurityException.class);
-        } catch (AssertionFailedError e) {
+        } catch (AssertionError e) {
             throw e;
         } catch (Throwable e) {
             /* Check that we got the correct exception */
@@ -463,7 +480,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -480,8 +497,7 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.setBundleLocation(neverlandLocation);
 
 		conf = cm.getConfiguration(pid);
-		assertEquals("Location Neverland", neverlandLocation,
-				this.getBundleLocationForCompare(conf));
+		assertThat(this.getBundleLocationForCompare(conf)).as("Location Neverland").isEqualTo(neverlandLocation);
 
 		this.setInappropriatePermission();
 		/* must fail because of inappropriate Permission. */
@@ -494,7 +510,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -523,6 +539,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testGetConfigurationWithLocation() throws Exception {
 		final String pid1 = Util.createPid("1");
 		final String pid2 = Util.createPid("2");
@@ -540,11 +557,10 @@ public class CMControl extends DefaultTestBundleControl {
 		String message = "try to get configuration without appropriate ConfigurationPermission.";
 		try {
 			conf = cm.getConfiguration(pid1, thisLocation);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
-			fail("Throwable must not be thrown for Configuration#getBundleLocation()",
-					e);
+			fail("Throwable must not be thrown for Configuration#getBundleLocation()", e);
 		}
 
 		/*
@@ -559,10 +575,10 @@ public class CMControl extends DefaultTestBundleControl {
 			// checkConfiguration(conf, "The same Configuration object",
 			// pid1,thisLocation);
 			fail("SecurityException must be thrown because cm must check the set location.");
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
-			// fail("Throwable must not be thrown because the configuring bundle has implicit CP for thisLocation",e);
+			// fail("Throwable must not be thrown because the configuring bundle has implicit CP for thisLocation", e);
 		}
 
 		conf.delete();
@@ -581,7 +597,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -616,7 +632,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -649,6 +665,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testConfigurationWithNullLocation() throws Exception {
 		final String bundlePid = Util.createPid("bundle1Pid");
 		final String thisLocation = getLocation();
@@ -668,7 +685,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -687,7 +704,7 @@ public class CMControl extends DefaultTestBundleControl {
 		checkConfiguration(conf, "A new Configuration object", bundlePid, null);
 
 		Dictionary<String,Object> props = new Hashtable<>();
-		props.put("StringKey", getName());
+		props.put("StringKey", testMethodName);
 		conf.update(props);
 
 		/*
@@ -695,11 +712,11 @@ public class CMControl extends DefaultTestBundleControl {
 		 * ignored
 		 */
 		Configuration conf3 = cm.getConfiguration(bundlePid, neverlandLocation);
-		assertEquals("Pid", bundlePid, conf3.getPid());
-		assertNull("FactoryPid", conf3.getFactoryPid());
-		assertNull("Location", this.getBundleLocationForCompare(conf3));
-		assertEquals("The same Confiuration props", getName(), conf3
-				.getProperties().get("StringKey"));
+		assertThat(conf3.getPid()).as("Pid").isEqualTo(bundlePid);
+		assertThat(conf3.getFactoryPid()).as("FactoryPid").isNull();
+		assertThat(this.getBundleLocationForCompare(conf3)).as("Location").isNull();
+		assertThat(conf3
+				.getProperties().get("StringKey")).as("The same Confiuration props").isEqualTo(testMethodName);
 
 		System.out.println("###########################"
 				+ conf3.getBundleLocation());
@@ -718,7 +735,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -738,7 +755,7 @@ public class CMControl extends DefaultTestBundleControl {
 		 * A SecurityException should have been thrown if security is enabled
 		 *
 		 * if (System.getSecurityManager() != null) failException(message,
-		 * SecurityException.class); } catch (AssertionFailedError e) { throw e;
+		 * SecurityException.class); } catch (AssertionError e) { throw e;
 		 * } catch (Throwable e) { Check that we got the correct exception
 		 * assertException(message, SecurityException.class, e);
 		 *
@@ -750,8 +767,7 @@ public class CMControl extends DefaultTestBundleControl {
 		 */
 		Configuration conf4 = cm.getConfiguration(bundlePid);
 		/* location MUST be changed to the callers bundle's location. */
-		assertEquals("Location", thisLocation,
-				this.getBundleLocationForCompare(conf4));
+		assertThat(this.getBundleLocationForCompare(conf4)).as("Location").isEqualTo(thisLocation);
 
 		/* In order to get Location, appropriate permission is required. */
 		this.setAppropriatePermission();
@@ -759,13 +775,11 @@ public class CMControl extends DefaultTestBundleControl {
 		Configuration conf5 = cm.getConfiguration(bundlePid);
 
 		/* location MUST be changed to the callers bundle's location. */
-		assertEquals("Location", thisLocation,
-				this.getBundleLocationForCompare(conf5));
+		assertThat(this.getBundleLocationForCompare(conf5)).as("Location").isEqualTo(thisLocation);
 
 		// this.setAppropriatePermission();
 		// conf3 = cm.getConfiguration(pid3);
-		assertEquals("Location", thisLocation,
-				this.getBundleLocationForCompare(conf3));
+		assertThat(this.getBundleLocationForCompare(conf3)).as("Location").isEqualTo(thisLocation);
 
 		this.setInappropriatePermission();
 		/* Set location of the configuration to null location */
@@ -779,7 +793,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -806,7 +820,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -826,7 +840,7 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (System.getSecurityManager() != null)
 				failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -845,16 +859,17 @@ public class CMControl extends DefaultTestBundleControl {
 	 * Test the change counter.
 	 * Enterprise 5.0 - ConfigAdmin 1.5
 	 */
+	@Test
 	public void testChangeCount() throws Exception {
-		trace("Testing change count...");
+		System.out.println("Testing change count...");
         // create config with pid
-		trace("Create test configuration");
+		System.out.println("Create test configuration");
         final String pid = "test_ca_counter_" + ConfigurationListenerImpl.LISTENER_PID_SUFFIX;
         final Configuration config = this.cm.getConfiguration(pid);
         final long startCount = config.getChangeCount();
 
         // register sync and async listener for change updates
-		trace("Create and register configuration listeners");
+		System.out.println("Create and register configuration listeners");
 		// list to check whether the sync listener is called
 		final List<ConfigurationEvent> events = new ArrayList<>();
 		final SynchronousConfigurationListener scl = new SynchronousConfigurationListener() {
@@ -866,11 +881,9 @@ public class CMControl extends DefaultTestBundleControl {
 				    && event.getPid().endsWith(ConfigurationListenerImpl.LISTENER_PID_SUFFIX)
 				    && event.getFactoryPid() == null) {
 
-					assertEquals("Config event pid match", pid, event.getPid());
-					assertEquals("Config event type match",
-							ConfigurationEvent.CM_UPDATED, event.getType());
-			        assertTrue("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount(),
-			        		config.getChangeCount() > startCount);
+					assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+					assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
+			        assertThat(config.getChangeCount() > startCount).as("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount()).isTrue();
 			        events.add(event);
 				}
 			}
@@ -882,27 +895,23 @@ public class CMControl extends DefaultTestBundleControl {
 			cl = createConfigurationListener(synchronizer);
 	        // update config with properties
 			config.update(singletonDictionary("x", "x"));
-	        assertTrue("Sync listener not called.", events.size() == 1);
+	        assertThat(events.size() == 1).as("Sync listener not called.").isTrue();
 
-	        assertTrue("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount(),
-	        		config.getChangeCount() > startCount);
+	        assertThat(config.getChangeCount() > startCount).as("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount()).isTrue();
 
-			trace("Wait until the ConfigurationListener has gotten the update");
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-			trace("Checking configuration event");
-			assertEquals("Config event pid match", pid, cl.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, cl.getType());
+			System.out.println("Wait until the ConfigurationListener has gotten the update");
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+			System.out.println("Checking configuration event");
+			assertThat(cl.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(cl.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
 
 			// reget configuration and check count
-			trace("Checking regetting configuration");
+			System.out.println("Checking regetting configuration");
 			final Configuration configNew = this.cm.getConfiguration(pid);
-			assertEquals("Configuration change count shouldn't have changed", config.getChangeCount(), configNew.getChangeCount());
-	        assertTrue("Expect second change count to be higher than " + startCount + " : " + configNew.getChangeCount(),
-	        		configNew.getChangeCount() > startCount);
+			assertThat(configNew.getChangeCount()).as("Configuration change count shouldn't have changed").isEqualTo(config.getChangeCount());
+	        assertThat(configNew.getChangeCount() > startCount).as("Expect second change count to be higher than " + startCount + " : " + configNew.getChangeCount()).isTrue();
 
-			trace("Testing change count...finished");
+			System.out.println("Testing change count...finished");
 		} finally {
 	        // clean up
 			if ( cl != null ) {
@@ -917,17 +926,18 @@ public class CMControl extends DefaultTestBundleControl {
 	 * Test the change counter for factory configuration
 	 * Enterprise 5.0 - ConfigAdmin 1.5
 	 */
+	@Test
 	public void testChangeCountFactory() throws Exception {
-		trace("Testing change count factory...");
+		System.out.println("Testing change count factory...");
         // create config with pid
-		trace("Create test configuration");
+		System.out.println("Create test configuration");
         final String factoryPid = "test_ca_counter_factory_" + ConfigurationListenerImpl.LISTENER_PID_SUFFIX;
         final Configuration config = this.cm.createFactoryConfiguration(factoryPid);
         final String pid = config.getPid();
         final long startCount = config.getChangeCount();
 
         // register sync and async listener for change updates
-		trace("Create and register configuration listeners");
+		System.out.println("Create and register configuration listeners");
 		// list to check whether the sync listener is called
 		final List<ConfigurationEvent> events = new ArrayList<>();
 		final SynchronousConfigurationListener scl = new SynchronousConfigurationListener() {
@@ -938,12 +948,10 @@ public class CMControl extends DefaultTestBundleControl {
 		        if (event.getPid() != null
 				    && event.getFactoryPid().endsWith(ConfigurationListenerImpl.LISTENER_PID_SUFFIX)) {
 
-					assertEquals("Config event factory pid match", factoryPid, event.getFactoryPid());
-					assertEquals("Config event pid match", pid, event.getPid());
-					assertEquals("Config event type match",
-							ConfigurationEvent.CM_UPDATED, event.getType());
-			        assertTrue("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount(),
-			        		config.getChangeCount() > startCount);
+					assertThat(event.getFactoryPid()).as("Config event factory pid match").isEqualTo(factoryPid);
+					assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+					assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
+			        assertThat(config.getChangeCount() > startCount).as("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount()).isTrue();
 			        events.add(event);
 				}
 			}
@@ -955,30 +963,26 @@ public class CMControl extends DefaultTestBundleControl {
 			cl = createConfigurationListener(synchronizer);
 	        // update config with properties
 			config.update(singletonDictionary("x", "x"));
-	        assertTrue("Sync listener not called.", events.size() == 1);
+	        assertThat(events.size() == 1).as("Sync listener not called.").isTrue();
 
-	        assertTrue("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount(),
-	        		config.getChangeCount() > startCount);
+	        assertThat(config.getChangeCount() > startCount).as("Expect second change count to be higher than " + startCount + " : " + config.getChangeCount()).isTrue();
 
-			trace("Wait until the ConfigurationListener has gotten the update");
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-			trace("Checking configuration event");
-			assertEquals("Config event factory pid match", factoryPid, cl.getFactoryPid());
-			assertEquals("Config event pid match", pid, cl.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, cl.getType());
+			System.out.println("Wait until the ConfigurationListener has gotten the update");
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+			System.out.println("Checking configuration event");
+			assertThat(cl.getFactoryPid()).as("Config event factory pid match").isEqualTo(factoryPid);
+			assertThat(cl.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(cl.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
 
 			// reget configuration and check count
-			trace("Checking regetting configuration");
+			System.out.println("Checking regetting configuration");
             final Configuration[] cfs = cm.listConfigurations( "(" + ConfigurationAdmin.SERVICE_FACTORYPID + "="
                     + factoryPid + ")" );
 			final Configuration configNew = cfs[0];
-			assertEquals("Configuration change count shouldn't have changed", config.getChangeCount(), configNew.getChangeCount());
-	        assertTrue("Expect second change count to be higher than " + startCount + " : " + configNew.getChangeCount(),
-	        		configNew.getChangeCount() > startCount);
+			assertThat(configNew.getChangeCount()).as("Configuration change count shouldn't have changed").isEqualTo(config.getChangeCount());
+	        assertThat(configNew.getChangeCount() > startCount).as("Expect second change count to be higher than " + startCount + " : " + configNew.getChangeCount()).isTrue();
 
-			trace("Testing change count...finished");
+			System.out.println("Testing change count...finished");
 		} finally {
 	        // clean up
 			if ( cl != null ) {
@@ -993,10 +997,11 @@ public class CMControl extends DefaultTestBundleControl {
 	 * Test sync listener.
 	 * Enterprise 5.0 - ConfigAdmin 1.5
 	 */
-	public void testSyncListener() throws Exception {
-		trace("Testing sync listener...");
+	@Test
+    public void testSyncListener() throws Exception {
+		System.out.println("Testing sync listener...");
 
-		trace("Create and register sync configuration listeners");
+		System.out.println("Create and register sync configuration listeners");
 		// List of events
 		final List<ConfigurationEvent> events = new ArrayList<>();
 		// Thread check
@@ -1023,41 +1028,37 @@ public class CMControl extends DefaultTestBundleControl {
 		Configuration config = null;
 		try {
 	        // create config with pid
-			trace("Create test configuration");
+			System.out.println("Create test configuration");
 	        final String pid = "test_sync_config_" + ConfigurationListenerImpl.LISTENER_PID_SUFFIX;
 	        config = this.cm.getConfiguration(pid);
 			config.update(singletonDictionary("y", "y"));
-	        assertEquals("No event received: " + events, 1, events.size());
+			assertThat(events).as("No event received: " + events).hasSize(1);
 
 	        ConfigurationEvent event = events.get(0);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event type match",
-						ConfigurationEvent.CM_UPDATED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
 
 			// update config
 			config.update(singletonDictionary("x", "x"));
-	        assertEquals("No event received", 2, events.size());
+			assertThat(events).as("No event received").hasSize(2);
 	        event = events.get(1);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
 
 			// update location
 			config.setBundleLocation("location");
-	        assertEquals("No event received", 3, events.size());
+			assertThat(events).as("No event received").hasSize(3);
 	        event = events.get(2);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_LOCATION_CHANGED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_LOCATION_CHANGED);
 
 	        // delete config
 	        config.delete();
 	        config = null;
-	        assertEquals("No event received", 4, events.size());
+			assertThat(events).as("No event received").hasSize(4);
 	        event = events.get(3);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_DELETED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_DELETED);
 
 		} finally {
 			this.unregisterService(scl);
@@ -1066,17 +1067,18 @@ public class CMControl extends DefaultTestBundleControl {
 			}
 		}
 
-		trace("Testing sync listener...finished");
+		System.out.println("Testing sync listener...finished");
     }
 
     /**
 	 * Test sync listener for factory config.
 	 * Enterprise 5.0 - ConfigAdmin 1.5
 	 */
-	public void testSyncListenerFactory() throws Exception {
-		trace("Testing sync listener...");
+	@Test
+    public void testSyncListenerFactory() throws Exception {
+		System.out.println("Testing sync listener...");
 
-		trace("Create and register sync configuration listeners");
+		System.out.println("Create and register sync configuration listeners");
 		// List of events
 		final List<ConfigurationEvent> events = new ArrayList<>();
 		// Thread check
@@ -1102,46 +1104,42 @@ public class CMControl extends DefaultTestBundleControl {
 		Configuration config = null;
 		try {
 	        // create config with pid
-			trace("Create test configuration");
+			System.out.println("Create test configuration");
 	        final String factoryPid = "test_sync_config_factory_" + ConfigurationListenerImpl.LISTENER_PID_SUFFIX;
 	        config = this.cm.createFactoryConfiguration(factoryPid);
 	        final String pid = config.getPid();
 			config.update(singletonDictionary("y", "y"));
-	        assertEquals("No event received: " + events, 1, events.size());
+			assertThat(events).as("No event received: " + events).hasSize(1);
 
 	        ConfigurationEvent event = events.get(0);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event factory pid match", factoryPid, event.getFactoryPid());
-			assertEquals("Config event type match",
-						ConfigurationEvent.CM_UPDATED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getFactoryPid()).as("Config event factory pid match").isEqualTo(factoryPid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
 
 			// update config
 			config.update(singletonDictionary("x", "x"));
-	        assertEquals("No event received", 2, events.size());
+			assertThat(events).as("No event received").hasSize(2);
 	        event = events.get(1);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event factory pid match", factoryPid, event.getFactoryPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getFactoryPid()).as("Config event factory pid match").isEqualTo(factoryPid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
 
 			// update location
 			config.setBundleLocation("location");
-	        assertEquals("No event received", 3, events.size());
+			assertThat(events).as("No event received").hasSize(3);
 	        event = events.get(2);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event factory pid match", factoryPid, event.getFactoryPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_LOCATION_CHANGED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getFactoryPid()).as("Config event factory pid match").isEqualTo(factoryPid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_LOCATION_CHANGED);
 
 	        // delete config
 	        config.delete();
 	        config = null;
-	        assertEquals("No event received", 4, events.size());
+			assertThat(events).as("No event received").hasSize(4);
 	        event = events.get(3);
-			assertEquals("Config event pid match", pid, event.getPid());
-			assertEquals("Config event factory pid match", factoryPid, event.getFactoryPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_DELETED, event.getType());
+			assertThat(event.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(event.getFactoryPid()).as("Config event factory pid match").isEqualTo(factoryPid);
+			assertThat(event.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_DELETED);
 
 		} finally {
 			this.unregisterService(scl);
@@ -1150,7 +1148,7 @@ public class CMControl extends DefaultTestBundleControl {
 			}
 		}
 
-		trace("Testing sync listener...finished");
+		System.out.println("Testing sync listener...finished");
     }
 
     /**
@@ -1163,12 +1161,13 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * Enterprise 5.0 - ConfigAdmin 1.5
 	 */
-	public void testTargetedPid() throws Exception {
-    	trace("Testing targeted pids...");
+	@Test
+    public void testTargetedPid() throws Exception {
+    	System.out.println("Testing targeted pids...");
 
-		final Bundle bundleT5 = getContext().installBundle(
+		final Bundle bundleT5 = context.installBundle(
 				getWebServer() + "bundleT5.jar");
-		final Bundle bundleT6 = getContext().installBundle(
+		final Bundle bundleT6 = context.installBundle(
 				getWebServer() + "bundleT6.jar");
 		final String pidBase = Util.createPid("pid_targeted1");
 		// create a list of configurations
@@ -1195,10 +1194,10 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			final SynchronizerImpl sync1_1 = new SynchronizerImpl("T5-1");
-			list.add(getContext().registerService(Synchronizer.class,
+			list.add(context.registerService(Synchronizer.class,
 					sync1_1, propsForSyncT5_1));
 			final SynchronizerImpl sync2_1 = new SynchronizerImpl("T6-1");
-			list.add(getContext().registerService(Synchronizer.class,
+			list.add(context.registerService(Synchronizer.class,
 					sync2_1, propsForSyncT6_1));
 
 			this.startTargetBundle(bundleT5);
@@ -1206,14 +1205,14 @@ public class CMControl extends DefaultTestBundleControl {
 			this.startTargetBundle(bundleT6);
 			this.setCPtoBundle("*", ConfigurationPermission.TARGET, bundleT6, false);
 
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0, count2_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNull("called back with null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 
 			// let's create some configurations
 			String previousKeyT5 = null, previousKeyT6 = null;
@@ -1221,7 +1220,7 @@ public class CMControl extends DefaultTestBundleControl {
 				// key contains marker at char 0 + pid
 				final String key = pids[i];
 				final String pid = key.substring(1);
-				trace("Creating config " + pid);
+				System.out.println("Creating config " + pid);
 				final Configuration c = this.cm.getConfiguration(pid, "?*");
 				configs.add(c);
 				final String propPreviousKeyT5 = previousKeyT5;
@@ -1242,7 +1241,7 @@ public class CMControl extends DefaultTestBundleControl {
 		        	assertNoCallback(sync1_1, count1_1);
 		        } else {
 		        	count1_1 = assertCallback(sync1_1, count1_1);
-					assertEquals("Pid is wrong", key, sync1_1.getProps().get("test"));
+					assertThat(sync1_1.getProps().get("test")).as("Pid is wrong").isEqualTo(key);
 					previousKeyT5 = key;
 		        }
 		        // check T6
@@ -1250,7 +1249,7 @@ public class CMControl extends DefaultTestBundleControl {
 		        	assertNoCallback(sync2_1, count2_1);
 		        } else {
 		        	count2_1 = assertCallback(sync2_1, count2_1);
-					assertEquals("Pid is wrong", key, sync2_1.getProps().get("test"));
+					assertThat(sync2_1.getProps().get("test")).as("Pid is wrong").isEqualTo(key);
 					previousKeyT6 = key;
 		        }
 			}
@@ -1271,12 +1270,12 @@ public class CMControl extends DefaultTestBundleControl {
 		        	count1_1 = assertCallback(sync1_1, count1_1);
 		        	if ( configs.size() == 0 ) {
 		        		// removed last config, so this is a delete
-		        		assertNull(sync1_1.getProps());
+		        		assertThat(sync1_1.getProps()).isNull();
 		        	} else {
 		        		// this is an update = downgrade to a previous config
-		        		assertNotNull(sync1_1.getProps());
+		        		assertThat(sync1_1.getProps()).isNotNull();
 		        		final String newPid = (String) sync1_1.getProps().get("test");
-		        		assertEquals("Pid is wrong", previousKeyT5, newPid);
+		        		assertThat(newPid).as("Pid is wrong").isEqualTo(previousKeyT5);
 		        	}
 		        }
 		        // check T6
@@ -1286,12 +1285,12 @@ public class CMControl extends DefaultTestBundleControl {
 		        	count2_1 = assertCallback(sync2_1, count2_1);
 		        	if ( configs.size() == 0 ) {
 		        		// removed last config, so this is a delete
-		        		assertNull(sync2_1.getProps());
+		        		assertThat(sync2_1.getProps()).isNull();
 		        	} else {
 		        		// this is an update = downgrade to a previous config
-		        		assertNotNull(sync2_1.getProps());
+		        		assertThat(sync2_1.getProps()).isNotNull();
 		        		final String newPid = (String) sync2_1.getProps().get("test");
-		        		assertEquals("Pid is wrong", previousKeyT6, newPid);
+		        		assertThat(newPid).as("Pid is wrong").isEqualTo(previousKeyT6);
 		        	}
 		        }
 			}
@@ -1305,7 +1304,7 @@ public class CMControl extends DefaultTestBundleControl {
 				c.delete();
 			}
 		}
-    	trace("Testing targeted pids...finished");
+    	System.out.println("Testing targeted pids...finished");
     }
 
     /**
@@ -1313,10 +1312,11 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * Enterprise 5.0 - ConfigAdmin 1.5
 	 */
-	public void testTargetedFactoryPid() throws Exception {
-    	trace("Testing targeted factory pids...");
+	@Test
+    public void testTargetedFactoryPid() throws Exception {
+    	System.out.println("Testing targeted factory pids...");
 
-		final Bundle bundleT5 = getContext().installBundle(
+		final Bundle bundleT5 = context.installBundle(
 				getWebServer() + "bundleT5.jar");
 		final String pidBase = Util.createPid("pid_targeted3");
 		final String[] pids = new String[] {
@@ -1333,22 +1333,22 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			final SynchronizerImpl sync1_1 = new SynchronizerImpl("T5-1");
-			list.add(getContext().registerService(Synchronizer.class,
+			list.add(context.registerService(Synchronizer.class,
 					sync1_1, propsForSyncT5_1));
 
 			this.startTargetBundle(bundleT5);
 			this.setCPtoBundle("*", ConfigurationPermission.TARGET, bundleT5, false);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 
 			// let's create some configurations
 			for(int i=0; i<pids.length; i++) {
 				final String factoryPid = pids[i];
-				trace("Creating factory config " + factoryPid);
+				System.out.println("Creating factory config " + factoryPid);
 				final Configuration c = this.cm.createFactoryConfiguration(factoryPid, null);
 				configs.add(c);
 				Dictionary<String,Object> newprops = new Hashtable<>();
@@ -1360,7 +1360,7 @@ public class CMControl extends DefaultTestBundleControl {
 		        	assertNoCallback(sync1_1, count1_1);
 		        } else {
 		        	count1_1 = assertCallback(sync1_1, count1_1);
-					assertEquals("Pid is wrong", c.getPid(), sync1_1.getProps().get("test"));
+					assertThat(sync1_1.getProps().get("test")).as("Pid is wrong").isEqualTo(c.getPid());
 		        }
 			}
 			// now delete them - order doesn't really matter, but we use reverse order anyway
@@ -1373,8 +1373,8 @@ public class CMControl extends DefaultTestBundleControl {
 		        	assertNoCallback(sync1_1, count1_1);
 		        } else {
 		        	count1_1 = assertCallback(sync1_1, count1_1);
-					assertEquals("Pid is wrong", pid, sync1_1.getProps().get("test"));
-					assertEquals("Pid is not delete", Boolean.TRUE, sync1_1.getProps().get("_deleted_"));
+					assertThat(sync1_1.getProps().get("test")).as("Pid is wrong").isEqualTo(pid);
+					assertThat(sync1_1.getProps().get("_deleted_")).as("Pid is not delete").isEqualTo(Boolean.TRUE);
 		        }
 			}
 
@@ -1387,7 +1387,7 @@ public class CMControl extends DefaultTestBundleControl {
 				c.delete();
 			}
 		}
-    	trace("Testing targeted factory pids...finished");
+    	System.out.println("Testing targeted factory pids...finished");
     }
 
     /**
@@ -1396,10 +1396,11 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * Enterprise 5.0 - ConfigAdmin 1.5
 	 */
-	public void testNegativeTargetedPid() throws Exception {
-    	trace("Testing targeted pids...");
+	@Test
+    public void testNegativeTargetedPid() throws Exception {
+    	System.out.println("Testing targeted pids...");
 
-		final Bundle bundleT5 = getContext().installBundle(
+		final Bundle bundleT5 = context.installBundle(
 				getWebServer() + "bundleT5.jar");
 		final String pid1 = Util.createPid("pid");
 		final String pid2 = Util.createPid("pid|targeted2");
@@ -1410,22 +1411,22 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			final SynchronizerImpl sync1_1 = new SynchronizerImpl("T5-2");
-			list.add(getContext().registerService(Synchronizer.class,
+			list.add(context.registerService(Synchronizer.class,
 					sync1_1, propsForSyncT5_1));
 
 			this.startTargetBundle(bundleT5);
 			this.setCPtoBundle("*", ConfigurationPermission.TARGET, bundleT5, false);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 
 			// let's create some configurations
 			for(int i=0; i<pids.length; i++) {
 				final String pid = pids[i];
-				trace("Creating config " + pid);
+				System.out.println("Creating config " + pid);
 				final Configuration c = this.cm.getConfiguration(pid, null);
 				configs.add(c);
 				c.update(singletonDictionary("test", pid));
@@ -1434,7 +1435,7 @@ public class CMControl extends DefaultTestBundleControl {
 		        	assertNoCallback(sync1_1, count1_1);
 		        } else {
 		        	count1_1 = assertCallback(sync1_1, count1_1);
-					assertEquals("Pid is wrong", pid, sync1_1.getProps().get("test"));
+					assertThat(sync1_1.getProps().get("test")).as("Pid is wrong").isEqualTo(pid);
 		        }
 			}
 
@@ -1448,7 +1449,7 @@ public class CMControl extends DefaultTestBundleControl {
 		        } else {
 		        	count1_1 = assertCallback(sync1_1, count1_1);
 		        	// remove, so no rebind
-	        		assertNull(sync1_1.getProps());
+	        		assertThat(sync1_1.getProps()).isNull();
 		        }
 			}
 
@@ -1461,7 +1462,7 @@ public class CMControl extends DefaultTestBundleControl {
 				c.delete();
 			}
 		}
-    	trace("Testing targeted pids...finished");
+    	System.out.println("Testing targeted pids...finished");
     }
 
     /**
@@ -1475,8 +1476,9 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
-	public void testDynamicBinding() throws Exception {
-		Bundle bundle1 = getContext().installBundle(
+	@Test
+    public void testDynamicBinding() throws Exception {
+		Bundle bundle1 = context.installBundle(
 				getWebServer() + "targetb1.jar");
 
 		final String bundlePid = Util.createPid("bundlePid1");
@@ -1488,39 +1490,35 @@ public class CMControl extends DefaultTestBundleControl {
 		 * 1. created newly with non-null location and after set to null. After
 		 * that, ManagedService is registered.
 		 */
-		trace("############ 1 testDynamicBinding()");
+		System.out.println("############ 1 testDynamicBinding()");
 		try {
 			conf = cm.getConfiguration(bundlePid, bundle1.getLocation());
 
 			props = new Hashtable<>();
-			props.put("StringKey", getName() + "-1");
+			props.put("StringKey", testMethodName + "-1");
 			conf.update(props);
 			conf.setBundleLocation(null);
 
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME);
-			assertTrue(
-					"ManagedService MUST be called back in case conf has no properties.",
-					calledback);
-			assertEquals("Dynamic binding(STARTED)", bundle1.getLocation(),
-					conf.getBundleLocation());
+			assertThat(calledback).as("ManagedService MUST be called back in case conf has no properties.").isTrue();
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(STARTED)").isEqualTo(bundle1.getLocation());
 
 			bundle1.stop();
-			assertEquals("Dynamic binding(STOPPED). Wait for a while.",
-					conf.getBundleLocation(), bundle1.getLocation());
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			assertThat(bundle1.getLocation()).as("Dynamic binding(STOPPED). Wait for a while.").isEqualTo(conf.getBundleLocation());
+			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
 			/*
 			 * After the dynamically bound bundle has been uninstalled, the
 			 * location must be reset to null.
 			 */
-			trace("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
-			assertNull("Dynamic binding(UNINSTALLED)", conf.getBundleLocation());
+			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
+			settle(SIGNAL_WAITING_TIME);
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED)").isNull();
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -1535,37 +1533,33 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 
 		/* 2. created newly with null location.(with properties) */
-		trace("############ 2 testDynamicBinding()");
+		System.out.println("############ 2 testDynamicBinding()");
 		try {
 			conf = cm.getConfiguration(bundlePid, null);
 			/* props is set. */
 			props = new Hashtable<>();
-			props.put("StringKey", getName() + "-2");
+			props.put("StringKey", testMethodName + "-2");
 			conf.update(props);
 			reg = null;
 
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME);
-			assertTrue(
-					"ManagedService MUST be called back in case conf has no properties.",
-					calledback);
-			assertEquals("Dynamic binding(STARTED)", bundle1.getLocation(),
-					conf.getBundleLocation());
+			assertThat(calledback).as("ManagedService MUST be called back in case conf has no properties.").isTrue();
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(STARTED)").isEqualTo(bundle1.getLocation());
 
 			bundle1.stop();
-			assertEquals("Dynamic binding(STOPPED).Wait for a while.",
-					conf.getBundleLocation(), bundle1.getLocation());
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			assertThat(bundle1.getLocation()).as("Dynamic binding(STOPPED).Wait for a while.").isEqualTo(conf.getBundleLocation());
+			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
-			trace("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
-			assertNull("Dynamic binding(UNINSTALLED)", conf.getBundleLocation());
+			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
+			settle(SIGNAL_WAITING_TIME);
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED)").isNull();
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -1579,31 +1573,27 @@ public class CMControl extends DefaultTestBundleControl {
 			conf = null;
 		}
 		/* 3. created newly with null location. (no properties) */
-		trace("############ 3 testDynamicBinding()");
+		System.out.println("############ 3 testDynamicBinding()");
 		try {
 			conf = cm.getConfiguration(bundlePid, null);
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME);
-			assertTrue(
-					"ManagedService MUST be called back in case conf has no properties.",
-					calledback);
-			assertEquals("Dynamic binding(STARTED)", bundle1.getLocation(),
-					conf.getBundleLocation());
+			assertThat(calledback).as("ManagedService MUST be called back in case conf has no properties.").isTrue();
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(STARTED)").isEqualTo(bundle1.getLocation());
 
 			bundle1.stop();
-			assertEquals("Dynamic binding(STOPPED).Wait for a while.",
-					conf.getBundleLocation(), bundle1.getLocation());
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			assertThat(bundle1.getLocation()).as("Dynamic binding(STOPPED).Wait for a while.").isEqualTo(conf.getBundleLocation());
+			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
-			trace("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
-			assertNull("Dynamic binding(UNINSTALLED)", conf.getBundleLocation());
+			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
+			settle(SIGNAL_WAITING_TIME);
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED)").isNull();
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -1621,36 +1611,31 @@ public class CMControl extends DefaultTestBundleControl {
 		 * explicitly set location. --> never dynamically unbound - bound
 		 * anymore.
 		 */
-		trace("############ 4 testDynamicBinding()");
+		System.out.println("############ 4 testDynamicBinding()");
 		try {
 			conf = cm.getConfiguration(bundlePid, null);
 			props = new Hashtable<String,Object>();
-			props.put("StringKey", getName() + "-4");
+			props.put("StringKey", testMethodName + "-4");
 			conf.update(props);
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME);
-			assertTrue(
-					"ManagedService MUST be called back in case conf has no properties.",
-					calledback);
-			assertEquals("Dynamic binding(STARTED)", bundle1.getLocation(),
-					conf.getBundleLocation());
+			assertThat(calledback).as("ManagedService MUST be called back in case conf has no properties.").isTrue();
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(STARTED)").isEqualTo(bundle1.getLocation());
 
 			conf.setBundleLocation(bundle1.getLocation());
 			bundle1.stop();
-			assertEquals("No more Dynamic binding(STOPPED). Wait for a while.",
-					conf.getBundleLocation(), bundle1.getLocation());
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			assertThat(bundle1.getLocation()).as("No more Dynamic binding(STOPPED). Wait for a while.").isEqualTo(conf.getBundleLocation());
+			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
-			trace("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
-			assertEquals("No more Dynamic binding(UNINSTALLED)",
-					bundle1.getLocation(), conf.getBundleLocation());
+			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
+			settle(SIGNAL_WAITING_TIME);
+			assertThat(conf.getBundleLocation()).as("No more Dynamic binding(UNINSTALLED)").isEqualTo(bundle1.getLocation());
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -1672,45 +1657,42 @@ public class CMControl extends DefaultTestBundleControl {
 		 *
 		 * ==> configuration is still bound to the target bundle
 		 */
-		trace("############ 5 testDynamicBinding()");
+		System.out.println("############ 5 testDynamicBinding()");
 		Bundle cmBundle = null;
 		try {
 			conf = cm.getConfiguration(bundlePid, null);
 			props = new Hashtable<String,Object>();
-			props.put("StringKey", getName() + "-5");
+			props.put("StringKey", testMethodName + "-5");
 			conf.update(props);
 			reg = null;
 
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME);
-			assertTrue("ManagedService MUST be called back.", calledback);
+			assertThat(calledback).as("ManagedService MUST be called back.").isTrue();
 			bundle1.stop();
 
 			restartCM();
 
-			Sleep.sleep(SIGNAL_WAITING_TIME * 2);
+			settle(SIGNAL_WAITING_TIME * 2);
 			Configuration[] confs = cm.listConfigurations(null);
-			assertNotNull("confs must NOT be empty:", confs);
-			assertEquals("confs.length must be one", 1, confs.length-existingConfigs.size());
+			assertThat(confs).as("confs must NOT be empty:").isNotNull();
+			assertThat(confs.length - existingConfigs.size()).as("confs.length must be one").isOne();
 			for (int i = 0; i < confs.length; i++) {
                 conf = confs[i];
                 if (!existingConfigs.contains(conf.getPid())) {
-                    trace("confs[" + i + "].getBundleLocation()=" + confs[i].getBundleLocation());
-                    assertEquals("Dynamic binding(UNINSTALLED):confs[" + i
-                        + "].getBundleLocation() must be the target bundle", bundle1.getLocation(),
-                        confs[i].getBundleLocation());
+                    System.out.println("confs[" + i + "].getBundleLocation()=" + confs[i].getBundleLocation());
+                    assertThat(confs[i].getBundleLocation()).as("Dynamic binding(UNINSTALLED):confs[" + i
+                        + "].getBundleLocation() must be the target bundle").isEqualTo(bundle1.getLocation());
                 }
             }
 			conf = cm.getConfiguration(bundlePid);
-			assertEquals(
-					"Restarted CM: Must be still bound to the target bundle.",
-					bundle1.getLocation(), conf.getBundleLocation());
+			assertThat(conf.getBundleLocation()).as("Restarted CM: Must be still bound to the target bundle.").isEqualTo(bundle1.getLocation());
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -1734,47 +1716,42 @@ public class CMControl extends DefaultTestBundleControl {
 		 *
 		 * ==> configuration is still bound to the uninstalled bundle
 		 */
-		trace("############ 6 testDynamicBinding()");
+		System.out.println("############ 6 testDynamicBinding()");
 		try {
 			conf = cm.getConfiguration(bundlePid, null);
 			props = new Hashtable<>();
-			props.put("StringKey", getName() + "-6");
+			props.put("StringKey", testMethodName + "-6");
 			conf.update(props);
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME);
 			cmBundle = stopCmBundle();
-			assertTrue(
-					"ManagedService MUST be called back in case conf has no properties.",
-					calledback);
+			assertThat(calledback).as("ManagedService MUST be called back in case conf has no properties.").isTrue();
 			bundle1.stop();
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
-			trace("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
+			settle(SIGNAL_WAITING_TIME);
 			startCmBundle(cmBundle);
 			cm = getService(ConfigurationAdmin.class);
-			Sleep.sleep(SIGNAL_WAITING_TIME * 2);
+			settle(SIGNAL_WAITING_TIME * 2);
 			Configuration[] confs = cm.listConfigurations(null);
-			assertNotNull("confs must NOT be empty:", confs);
-            assertEquals("confs.length must be one", 1, confs.length - existingConfigs.size());
+			assertThat(confs).as("confs must NOT be empty:").isNotNull();
+			assertThat(confs.length - existingConfigs.size()).as("confs.length must be one").isOne();
             for (int i = 0; i < confs.length; i++) {
                 conf = confs[i];
                 if (!existingConfigs.contains(conf.getPid())) {
-                    trace("confs[" + i + "].getBundleLocation()=" + confs[i].getBundleLocation());
-                    assertEquals("Dynamic binding(UNINSTALLED):confs[" + i + "].getBundleLocation() must be null",
-                        null, confs[i].getBundleLocation());
+                    System.out.println("confs[" + i + "].getBundleLocation()=" + confs[i].getBundleLocation());
+                    assertThat(confs[i].getBundleLocation()).as("Dynamic binding(UNINSTALLED):confs[" + i + "].getBundleLocation() must be null").isEqualTo(null);
                 }
             }
 			conf = cm.getConfiguration(bundlePid);
-			assertEquals("Dynamic binding(UNINSTALLED): Must be Re-bound",
-					getContext().getBundle().getLocation(),
-					conf.getBundleLocation());
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED): Must be Re-bound").isEqualTo(context.getBundle().getLocation());
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -1798,39 +1775,34 @@ public class CMControl extends DefaultTestBundleControl {
 		 *
 		 * ==> configuration is still bound to the uninstalled bundle
 		 */
-		trace("############ 7 testDynamicBinding()");
+		System.out.println("############ 7 testDynamicBinding()");
 		try {
 			conf = cm.getConfiguration(bundlePid, null);
 			// props = new Hashtable();
-			// props.put("StringKey", getName()+"-7");
+			// props.put("StringKey", testMethodName+"-7");
 			// conf.update(props);
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME);
 			cmBundle = stopCmBundle();
-			assertTrue(
-					"ManagedService MUST be called back in case conf has no properties.",
-					calledback);
+			assertThat(calledback).as("ManagedService MUST be called back in case conf has no properties.").isTrue();
 			bundle1.stop();
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
-			trace("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
+			settle(SIGNAL_WAITING_TIME);
 			startCmBundle(cmBundle);
 			cm = getService(ConfigurationAdmin.class);
-			Sleep.sleep(SIGNAL_WAITING_TIME * 2);
+			settle(SIGNAL_WAITING_TIME * 2);
 			conf = cm.getConfiguration(bundlePid, null);
-			assertEquals("Dynamic binding(UNINSTALLED): Must be reset to null",
-					null, conf.getBundleLocation());
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED): Must be reset to null").isEqualTo(null);
 			conf = cm.getConfiguration(bundlePid);
-			assertEquals("Dynamic binding(UNINSTALLED): Must be Re-bound",
-					getContext().getBundle().getLocation(),
-					conf.getBundleLocation());
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED): Must be Re-bound").isEqualTo(context.getBundle().getLocation());
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -1849,89 +1821,77 @@ public class CMControl extends DefaultTestBundleControl {
 		 * ManagedService is registered, the location is set to null. What
 		 * happens ?
 		 */
-		trace("############ 8 testDynamicBinding()");
+		System.out.println("############ 8 testDynamicBinding()");
 		ServiceRegistration< ? > reg2 = null;
 		Bundle bundle2 = null;
 		try {
 			conf = cm.getConfiguration(bundlePid, getWebServer()
 					+ "targetb1.jar");
 			props = new Hashtable<String,Object>();
-			props.put("StringKey", getName() + "-8");
+			props.put("StringKey", testMethodName + "-8");
 			conf.update(props);
 
 			SynchronizerImpl sync = new SynchronizerImpl("ID1");
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count = 0;
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME,
 					++count);
-			assertTrue(
-					"ManagedService MUST be called back in case conf has no properties.",
-					calledback);
-			assertEquals("Dynamic binding(STARTED)", bundle1.getLocation(),
-					conf.getBundleLocation());
+			assertThat(calledback).as("ManagedService MUST be called back in case conf has no properties.").isTrue();
+			assertThat(conf.getBundleLocation()).as("Dynamic binding(STARTED)").isEqualTo(bundle1.getLocation());
 
 			conf.setBundleLocation(null);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			// calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
-			// assertFalse("ManagedService MUST NOT be called back.",
-			// calledback);
-			// assertEquals("Must be still bound to the target bundle.",
-			// bundle1.getLocation(), conf.getBundleLocation());
+			// assertThat(// calledback).as("ManagedService MUST NOT be called back.").isFalse();
+			// assertThat(conf.getBundleLocation()).as("Must be still bound to the target bundle.").isEqualTo(// bundle1.getLocation());
 
 			// TODO: check if the unbound once (updated(null) is called)
 			// and bound againg (updated(props) is called ).
 
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count++);
-			assertTrue("ManagedService MUST be called back.", calledback);
+			assertThat(calledback).as("ManagedService MUST be called back.").isTrue();
 			conf.update(props);
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count++);
-			assertTrue("ManagedService MUST be called back.", calledback);
-			assertEquals("Must be bound to the target bundle. again.",
-					bundle1.getLocation(), conf.getBundleLocation());
+			assertThat(calledback).as("ManagedService MUST be called back.").isTrue();
+			assertThat(conf.getBundleLocation()).as("Must be bound to the target bundle. again.").isEqualTo(bundle1.getLocation());
 
-			bundle2 = getContext().installBundle(
+			bundle2 = context.installBundle(
 					getWebServer() + "targetb2.jar");
 			SynchronizerImpl sync2 = new SynchronizerImpl("ID2");
-			reg2 = getContext().registerService(Synchronizer.class,
+			reg2 = context.registerService(Synchronizer.class,
 					sync2, propsForSync2);
 			this.startTargetBundle(bundle2);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count2 = 0;
 			boolean calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, ++count2);
-			//assertFalse(
-			//		"ManagedService MUST NOT be called back in case conf has no properties.",
-			//		calledback2);
-			assertTrue(
-					"ManagedService MUST be called back with null property.",
-					calledback2);
+			//assertThat(//		calledback2).as(//		"ManagedService MUST NOT be called back in case conf has no properties.").isFalse();
+			assertThat(calledback2).as("ManagedService MUST be called back with null property.").isTrue();
 
 			bundle1.stop();
-			assertEquals("Dynamic binding(STOPPED). Wait for a while.",
-					conf.getBundleLocation(), bundle1.getLocation());
+			assertThat(bundle1.getLocation()).as("Dynamic binding(STOPPED). Wait for a while.").isEqualTo(conf.getBundleLocation());
             calledback = sync2.waitForSignal(SIGNAL_WAITING_TIME, count2 + 1);
-			assertFalse("ManagedService2 MUST NOT be called back.", calledback);
+			assertThat(calledback).as("ManagedService2 MUST NOT be called back.").isFalse();
 			bundle1.uninstall();
-			trace("Dynamic binding(UNINSTALLED). Wait for a while.");
+			System.out.println("Dynamic binding(UNINSTALLED). Wait for a while.");
 			calledback2 = sync2
 					.waitForSignal(SIGNAL_WAITING_TIME * 2, ++count2);
-            assertTrue("ManagedService2 MUST be called back.", calledback2);
+            assertThat(calledback2).as("ManagedService2 MUST be called back.").isTrue();
 
-            assertEquals("Dynamic binding(UNINSTALLED). Wait for a while.", bundle2.getLocation(),
-                conf.getBundleLocation());
+            assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED). Wait for a while.").isEqualTo(bundle2.getLocation());
 			props.put("StringKey", "stringvalue2");
 			conf.update(props);
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, ++count2);
-			assertTrue("ManagedService MUST be called back.", calledback2);
+			assertThat(calledback2).as("ManagedService MUST be called back.").isTrue();
 			conf.delete();
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, ++count2);
-			assertTrue("ManagedService MUST be called back.", calledback2);
+			assertThat(calledback2).as("ManagedService MUST be called back.").isTrue();
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertFalse("ManagedService MUST NOT be called back.", calledback);
+			assertThat(calledback).as("ManagedService MUST NOT be called back.").isFalse();
 
 		} finally {
 			if (reg != null)
@@ -1956,7 +1916,7 @@ public class CMControl extends DefaultTestBundleControl {
          * 9. Test dynamic bindings from getConfiguration(pid) and
          * createConfiguration(pid) (Member Bug 2551)
          */
-        trace("############ 9 testDynamicBinding()");
+        System.out.println("############ 9 testDynamicBinding()");
         String dynamicPid1 = Util.createPid("dynamicPid1");
         String dynamicPid2 = Util.createPid("dynamicPid2");
         String dynamicFactoryPid = Util.createPid("dynamicFactoryPid");
@@ -1970,18 +1930,17 @@ public class CMControl extends DefaultTestBundleControl {
 
             // ensure unbound configuration
             conf = this.cm.getConfiguration(dynamicPid1, null);
-            assertNotNull("Configuration must exist for " + dynamicPid1, conf);
-            assertNull("Configuration must be new for " + dynamicPid1, conf.getProperties());
-            assertNull("Configuration for " + dynamicPid1 + " must be unbound",
-                this.getBundleLocationForCompare(conf));
+            assertThat(conf).as("Configuration must exist for " + dynamicPid1).isNotNull();
+            assertThat(conf.getProperties()).as("Configuration must be new for " + dynamicPid1).isNull();
+            assertThat(this.getBundleLocationForCompare(conf)).as("Configuration for " + dynamicPid1 + " must be unbound").isNull();
             conf.update(props);
 
             SynchronizerImpl sync = new SynchronizerImpl("ID1");
-			reg = getContext().registerService(Synchronizer.class, sync,
+			reg = context.registerService(Synchronizer.class, sync,
 					propsForSync1);
-            bundle1 = getContext().installBundle(getWebServer() + "targetb1.jar");
+            bundle1 = context.installBundle(getWebServer() + "targetb1.jar");
             this.startTargetBundle(bundle1);
-            trace("Wait for signal.");
+            System.out.println("Wait for signal.");
 
 			ServiceReference<ConfigurationAdmin> caref = bundle1
 					.getBundleContext()
@@ -1990,61 +1949,56 @@ public class CMControl extends DefaultTestBundleControl {
 
             // ensure configuration 1 is bound to bundle1
             conf = ca.getConfiguration(dynamicPid1);
-            assertNotNull("Configuration must exist for " + dynamicPid1, conf);
-            assertNotNull("Configuration must not be new for " + dynamicPid1, conf.getProperties());
-            assertEquals("Configuration for " + dynamicPid1 + " must be bound to " + bundle1.getLocation(),
-                bundle1.getLocation(), this.getBundleLocationForCompare(conf));
+            assertThat(conf).as("Configuration must exist for " + dynamicPid1).isNotNull();
+            assertThat(conf.getProperties()).as("Configuration must not be new for " + dynamicPid1).isNotNull();
+            assertThat(this.getBundleLocationForCompare(conf)).as("Configuration for " + dynamicPid1 + " must be bound to " + bundle1.getLocation()).isEqualTo(bundle1.getLocation());
 
             // ensure configuration 2 is bound to bundle1
             conf = ca.getConfiguration(dynamicPid2);
-            assertNotNull("Configuration must exist for " + dynamicPid2, conf);
-            assertNull("Configuration must be new for " + dynamicPid2, conf.getProperties());
-            assertEquals("Configuration for " + dynamicPid2 + " must be bound to " + bundle1.getLocation(),
-                bundle1.getLocation(), this.getBundleLocationForCompare(conf));
+            assertThat(conf).as("Configuration must exist for " + dynamicPid2).isNotNull();
+            assertThat(conf.getProperties()).as("Configuration must be new for " + dynamicPid2).isNull();
+            assertThat(this.getBundleLocationForCompare(conf)).as("Configuration for " + dynamicPid2 + " must be bound to " + bundle1.getLocation()).isEqualTo(bundle1.getLocation());
             conf.update(props);
 
             // ensure factory configuration bound to bundle1
             conf = ca.createFactoryConfiguration(dynamicFactoryPid);
             dynamicFactoryPidInstance = conf.getPid();
-            assertNotNull("Factory Configuration must exist for " + dynamicFactoryPid, conf);
-            assertNull("Factory Configuration must be new for " + dynamicFactoryPid, conf.getProperties());
-            assertEquals(
-                "Factory Configuration for " + dynamicFactoryPid + " must be bound to " + bundle1.getLocation(),
-                bundle1.getLocation(), this.getBundleLocationForCompare(conf));
+            assertThat(conf).as("Factory Configuration must exist for " + dynamicFactoryPid).isNotNull();
+            assertThat(conf.getProperties()).as("Factory Configuration must be new for " + dynamicFactoryPid).isNull();
+            assertThat(this.getBundleLocationForCompare(conf)).as("Factory Configuration for " + dynamicFactoryPid + " must be bound to " + bundle1.getLocation()).isEqualTo(bundle1.getLocation());
             conf.update(props);
 
             SynchronizerImpl sync2 = new SynchronizerImpl("SyncListener");
-			reg2 = getContext().registerService(ConfigurationListener.class,
+			reg2 = context.registerService(ConfigurationListener.class,
 					new SyncEventListener(sync2),
                 null);
 
             // unsinstall the bundle, make sure configurations are unbound
-            this.uninstallBundle(bundle1);
+            bundle1.uninstall();
 
             // wait for three (CM_LOCATION_CHANGED) events
             boolean threeEvents = sync2.waitForSignal(500, 3);
-            assertTrue("Expecting three CM_LOCATION_CHANGED events after bundle uninstallation", threeEvents);
+            assertThat(threeEvents).as("Expecting three CM_LOCATION_CHANGED events after bundle uninstallation").isTrue();
 
             // ensure configuration 1 is unbound
             conf = this.cm.getConfiguration(dynamicPid1, null);
-            assertNotNull("Configuration must exist for " + dynamicPid1, conf);
-            assertNotNull("Configuration must not be new for " + dynamicPid1, conf.getProperties());
-            assertNull("Configuration for " + dynamicPid1 + " must be unbound", this.getBundleLocationForCompare(conf));
+            assertThat(conf).as("Configuration must exist for " + dynamicPid1).isNotNull();
+            assertThat(conf.getProperties()).as("Configuration must not be new for " + dynamicPid1).isNotNull();
+            assertThat(this.getBundleLocationForCompare(conf)).as("Configuration for " + dynamicPid1 + " must be unbound").isNull();
 
             // ensure configuration 2 is unbound
             conf = this.cm.getConfiguration(dynamicPid2, null);
-            assertNotNull("Configuration must exist for " + dynamicPid2, conf);
-            assertNotNull("Configuration must not be new for " + dynamicPid2, conf.getProperties());
-            assertNull("Configuration for " + dynamicPid2 + " must be unbound", this.getBundleLocationForCompare(conf));
+            assertThat(conf).as("Configuration must exist for " + dynamicPid2).isNotNull();
+            assertThat(conf.getProperties()).as("Configuration must not be new for " + dynamicPid2).isNotNull();
+            assertThat(this.getBundleLocationForCompare(conf)).as("Configuration for " + dynamicPid2 + " must be unbound").isNull();
 
             // ensure factory configuration is unbound
             conf = this.cm.getConfiguration(dynamicFactoryPidInstance, null);
-            assertNotNull("Configuration must exist for " + dynamicFactoryPidInstance, conf);
-            assertEquals("Configuration " + dynamicFactoryPidInstance + " must be factory configuration for "
-                + dynamicFactoryPid, dynamicFactoryPid, conf.getFactoryPid());
-            assertNotNull("Configuration must not be new for " + dynamicFactoryPidInstance, conf.getProperties());
-            assertNull("Configuration for " + dynamicFactoryPidInstance + " must be unbound",
-                this.getBundleLocationForCompare(conf));
+            assertThat(conf).as("Configuration must exist for " + dynamicFactoryPidInstance).isNotNull();
+            assertThat(conf.getFactoryPid()).as("Configuration " + dynamicFactoryPidInstance + " must be factory configuration for "
+                + dynamicFactoryPid).isEqualTo(dynamicFactoryPid);
+            assertThat(conf.getProperties()).as("Configuration must not be new for " + dynamicFactoryPidInstance).isNotNull();
+            assertThat(this.getBundleLocationForCompare(conf)).as("Configuration for " + dynamicFactoryPidInstance + " must be unbound").isNull();
 
         } finally {
             if (reg != null) reg.unregister();
@@ -2115,7 +2069,7 @@ public class CMControl extends DefaultTestBundleControl {
 		// add(list, CP, "*", "CONFIGURE");
 		add(list, AP, "*", "*");
 		permissionFlag = false;
-		this.setBundlePermission(super.getContext().getBundle(), list);
+		this.setBundlePermission(super.context.getBundle(), list);
 	}
 
 	private void setAppropriatePermission() throws BundleException {
@@ -2129,7 +2083,7 @@ public class CMControl extends DefaultTestBundleControl {
 		add(list, CP, "*", "CONFIGURE");
 		add(list, AP, "*", "*");
 		permissionFlag = true;
-		this.setBundlePermission(super.getContext().getBundle(), list);
+		this.setBundlePermission(super.context.getBundle(), list);
 
 	}
 
@@ -2142,33 +2096,32 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testUpdate() throws Exception {
 		String pid = Util.createPid();
 		Configuration conf = cm.getConfiguration(pid);
 		Dictionary<String,Object> props = conf.getProperties();
-		assertNull("Properties in conf", props);
+		assertThat(props).as("Properties in conf").isNull();
 
 		Hashtable<String,Object> newprops = new Hashtable<String,Object>();
 		newprops.put("somekey", "somevalue");
 		conf.update(newprops);
 		props = conf.getProperties();
-		assertNotNull("Properties in conf", props);
-		assertEquals("conf property 'somekey'", "somevalue",
-				props.get("somekey"));
+		assertThat(props).as("Properties in conf").isNotNull();
+		assertThat(props.get("somekey")).as("conf property 'somekey'").isEqualTo("somevalue");
 		Configuration conf2 = cm.getConfiguration(pid);
 		Dictionary<String,Object> props2 = conf2.getProperties();
-		assertNotNull("Properties in conf2", props2);
-		assertEquals("conf2 property 'somekey'", "somevalue",
-				props2.get("somekey"));
-		// assertSame("Same configurations", conf, conf2);
-		// assertEquals("Equal configurations", conf, conf2);
-		// assertEquals("Equal pids", conf.getPid(), conf2.getPid());
-		assertTrue("Equal configurations", equals(conf, conf2));
+		assertThat(props2).as("Properties in conf2").isNotNull();
+		assertThat(props2.get("somekey")).as("conf2 property 'somekey'").isEqualTo("somevalue");
+		// assertThat(conf2).as("Same configurations").isSameAs(conf);
+		// assertThat(conf2).as("Equal configurations").isEqualTo(conf);
+		// assertThat(conf2.getPid()).as("Equal pids").isEqualTo(conf.getPid());
+		assertThat(equals(conf, conf2)).as("Equal configurations").isTrue();
 
 		/* check returned properties are copied ones. */
 		Dictionary<String,Object> props3 = conf2.getProperties();
 		props3.put("KeyOnly3", "ValueOnly3");
-		assertTrue("Properties are copied", props2.get("KeyOnly3") == null);
+		assertThat(props2.get("KeyOnly3") == null).as("Properties are copied").isTrue();
 
 		/* Try to update with illegal configuration types */
 		Hashtable<String,Object> illegalprops = new Hashtable<>();
@@ -2182,7 +2135,7 @@ public class CMControl extends DefaultTestBundleControl {
 			conf2.update(illegalprops);
 			/* A IllegalArgumentException should have been thrown */
 			failException(message, IllegalArgumentException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -2198,7 +2151,7 @@ public class CMControl extends DefaultTestBundleControl {
 			conf2.update(casevariants);
 			/* A IllegalArgumentException should have been thrown */
 			failException(message, IllegalArgumentException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -2211,6 +2164,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * Test the update if different method.
 	 * Tests synchronous listeners and managed service.
 	 */
+	@Test
 	public void testUpdateIfDifferent() throws Exception {
 		final String pid = Util.createPid("uid");
 		final List<ConfigurationEvent> events = new ArrayList<>();
@@ -2261,26 +2215,26 @@ public class CMControl extends DefaultTestBundleControl {
 			props1.put("scalar", "somevalue");
 			props1.put("array", new long[] {1, 2});
 			props1.put("collection", Arrays.asList(1, 2));
-			assertTrue(conf.updateIfDifferent(props1));
-			assertEquals(startLevel + 1, conf.getChangeCount());
+			assertThat(conf.updateIfDifferent(props1)).isTrue();
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 1);
 
-			assertEquals(1, events.size());
+			assertThat(events).hasSize(1);
 			// wait for managed service
 			barrier.await();
 			barrier.reset();
 
 			// update again with same props
-			assertFalse(conf.updateIfDifferent(props1));
-			assertEquals(startLevel + 1, conf.getChangeCount());
-			assertEquals(1, events.size());
+			assertThat(conf.updateIfDifferent(props1)).isFalse();
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 1);
+			assertThat(events).hasSize(1);
             
 			// update scalar prop
 			final Hashtable<String,Object> props2 = new Hashtable<String,Object>(props1);
 			props2.put("scalar", "newvalue");
-			assertTrue(conf.updateIfDifferent(props2));
-			assertEquals(startLevel + 2, conf.getChangeCount());
+			assertThat(conf.updateIfDifferent(props2)).isTrue();
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 2);
 
-			assertEquals(2, events.size());
+			assertThat(events).hasSize(2);
 			
 			// wait for managed service
 			barrier.await();
@@ -2289,9 +2243,9 @@ public class CMControl extends DefaultTestBundleControl {
 			// update array prop
 			final Hashtable<String,Object> props3 = new Hashtable<String,Object>(props2);
 			props3.put("array",  new long[] {3, 4});
-			assertTrue(conf.updateIfDifferent(props3));
-			assertEquals(startLevel + 3, conf.getChangeCount());
-			assertEquals(3, events.size());
+			assertThat(conf.updateIfDifferent(props3)).isTrue();
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 3);
+			assertThat(events).hasSize(3);
 			
 			// wait for managed service
 			barrier.await();
@@ -2301,9 +2255,9 @@ public class CMControl extends DefaultTestBundleControl {
 			final Hashtable<String,Object> props4 = new Hashtable<String,Object>(
 					props3);
 			props4.put("collection", Arrays.asList(3, 4));
-			assertTrue(conf.updateIfDifferent(props4));
-			assertEquals(startLevel + 4, conf.getChangeCount());
-			assertEquals(4, events.size());
+			assertThat(conf.updateIfDifferent(props4)).isTrue();
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 4);
+			assertThat(events).hasSize(4);
 			
 			// check updates to managed service
 			System.out.println("Waiting for managed service updates");
@@ -2311,15 +2265,15 @@ public class CMControl extends DefaultTestBundleControl {
 			barrier.await();
 			barrier.reset();
 
-			assertNull(updates.get(0));
-			assertEquals("somevalue", updates.get(1).get("scalar"));
-			assertEquals("newvalue", updates.get(2).get("scalar"));
+			assertThat(updates.get(0)).isNull();
+			assertThat(updates.get(1).get("scalar")).isEqualTo("somevalue");
+			assertThat(updates.get(2).get("scalar")).isEqualTo("newvalue");
 			long[] array = (long[]) updates.get(3).get("array");
-			assertEquals(3, array[0]);
-			assertEquals(4, array[1]);
+			assertThat(array[0]).isEqualTo(3);
+			assertThat(array[1]).isEqualTo(4);
 			ArrayList< ? > collection = new ArrayList<>(
 					(Collection< ? >) updates.get(4).get("collection"));
-			assertEquals(Arrays.asList(3, 4), collection);
+			assertThat(collection).isEqualTo(Arrays.asList(3, 4));
 
 		} finally {
 			this.unregisterService(listener);
@@ -2335,13 +2289,14 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.getPid()
 	 * @throws Exception
 	 */
+	@Test
 	public void testEquals() throws Exception {
         String pid = Util.createPid();
         try {
             Configuration conf1 = cm.getConfiguration(pid);
             Configuration conf2 = cm.getConfiguration(pid);
-            assertEquals("Equal configurations", conf1, conf2);
-            assertTrue("Equal configurations", equals(conf1, conf2));
+            assertThat(conf2).as("Equal configurations").isEqualTo(conf1);
+            assertThat(equals(conf1, conf2)).as("Equal configurations").isTrue();
         } finally {
             cm.getConfiguration(pid).delete();
         }
@@ -2356,6 +2311,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.delete()
 	 * @throws Exception
 	 */
+	@Test
 	public void testListConfigurations() throws Exception {
 		this.setAppropriatePermission();
 		/* Create configurations */
@@ -2461,7 +2417,7 @@ public class CMControl extends DefaultTestBundleControl {
 				cm.listConfigurations("(service.pid=" + Util.createPid() + "*");
 				/* A InvalidSyntaxException should have been thrown */
 				failException(message, InvalidSyntaxException.class);
-			} catch (AssertionFailedError e) {
+			} catch (AssertionError e) {
 				throw e;
 			} catch (Throwable e) {
 				/* Check that we got the correct exception */
@@ -2490,7 +2446,7 @@ public class CMControl extends DefaultTestBundleControl {
 						+ ")(service.pid=" + pid22 + ")(service.pid=" + pid31
 						+ ")(service.pid=" + pid32 + ")(service.pid="
 						+ otherPid + "))");
-		assertNull("Left configurations", leftConfs);
+		assertThat(leftConfs).as("Left configurations").isNull();
 
 	}
 
@@ -2509,10 +2465,10 @@ public class CMControl extends DefaultTestBundleControl {
 		for (int i = 0; i < confs.length; i++) {
 			int index = isPartOf(confs[i], updatedConfigs2);
 			if (index != -1) {
-				pass(confs[i].getPid() + " was returned");
+				System.out.println(confs[i].getPid() + " was returned");
 				removedConfigs2.add(confs[i]);
 			} else if (otherConf != null && confs[i].equals(otherConf)) {
-				pass(confs[i].getPid() + " was returned");
+				System.out.println(confs[i].getPid() + " was returned");
 				otherFlag = true;
 			} else {
 				fail(confs[i].getPid() + " should not have been listed");
@@ -2543,16 +2499,16 @@ public class CMControl extends DefaultTestBundleControl {
 		for (int i = 0; i < confs.length; i++) {
 			int index = isPartOf(confs[i], updatedConfigs2);
 			if (index != -1) {
-				pass(confs[i].getPid() + " was returned");
+				System.out.println(confs[i].getPid() + " was returned");
 				removedConfigs2.add(confs[i]);
 				continue;
 			}
 			index = isPartOf(confs[i], updatedConfigs3);
 			if (index != -1) {
-				pass(confs[i].getPid() + " was returned");
+				System.out.println(confs[i].getPid() + " was returned");
 				removedConfigs3.add(confs[i]);
 			} else if (otherConf != null && equals(confs[i], otherConf)) {
-				pass(confs[i].getPid() + " was returned");
+				System.out.println(confs[i].getPid() + " was returned");
 				otherFlag = true;
             } else if (!existingConfigs.contains(confs[i].getPid())) {
 				fail(confs[i].getPid() + " should not have been listed");
@@ -2575,6 +2531,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.getProperties()
 	 * @spec Configuration.getBundleLocation()
 	 */
+	@Test
 	public void testManagedServiceRegistration() throws Exception {
 		this.setAppropriatePermission();
 		final String pid = Util.createPid("somepid");
@@ -2582,17 +2539,17 @@ public class CMControl extends DefaultTestBundleControl {
 		/* create a configuration in advance, then register ManagedService */
 		Configuration conf = cm.getConfiguration(pid);
 
-		trace("created configuration has null properties.");
-		trace("Create and register a new the ManagedService");
+		System.out.println("created configuration has null properties.");
+		System.out.println("Create and register a new the ManagedService");
 
 		Semaphore semaphore = new Semaphore(0);
 		ManagedServiceImpl ms = createManagedService(pid, semaphore);
-		trace("Wait until the ManagedService has gotten the update");
+		System.out.println("Wait until the ManagedService has gotten the update");
 		boolean calledBack = semaphore.tryAcquire(SIGNAL_WAITING_TIME,
 				TimeUnit.MILLISECONDS);
-		assertTrue("ManagedService is called back", calledBack);
+		assertThat(calledBack).as("ManagedService is called back").isTrue();
 
-		trace("Update done!");
+		System.out.println("Update done!");
 		conf.delete();
 
 		final String pid2 = Util.createPid("somepid2");
@@ -2602,13 +2559,13 @@ public class CMControl extends DefaultTestBundleControl {
 		props.put("somekey", "somevalue");
 		props.put("CAPITALkey", "CAPITALvalue");
 		conf2.update(props);
-		trace("created configuration has non-null properties.");
-		trace("Create and register a new the ManagedService");
-		trace("Wait until the ManagedService has gotten the update");
+		System.out.println("created configuration has non-null properties.");
+		System.out.println("Create and register a new the ManagedService");
+		System.out.println("Wait until the ManagedService has gotten the update");
 		semaphore = new Semaphore(0);
 		ms = createManagedService(pid2, semaphore);
 		semaphore.acquire();
-		trace("Update done!");
+		System.out.println("Update done!");
 
 		/*
 		 * Add the two properties added by the CM and then check for equality in
@@ -2618,11 +2575,11 @@ public class CMControl extends DefaultTestBundleControl {
 		// props.put(SERVICE_BUNDLE_LOCATION, "cm_TBC"); R3 does not include
 		// service.bundleLocation anymore!
 		assertEqualProperties("Properties equal?", props, ms.getProperties());
-		trace((String) ms.getProperties().get("service.pid"));
-		// trace((String) ms.getProperties().get("service.bundleLocation"));
-		trace(this.getBundleLocationForCompare(conf2));
+		System.out.println((String) ms.getProperties().get("service.pid"));
+		// System.out.println((String) ms.getProperties().get("service.bundleLocation"));
+		System.out.println(this.getBundleLocationForCompare(conf2));
 		/* OUTSIDE_OF_SPEC */
-		// assertNotSame("Properties same?", props, ms.getProperties());
+		// assertThat(ms.getProperties()).as("Properties same?").isNotSameAs(props);
 		conf2.delete();
 
 	}
@@ -2646,70 +2603,68 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistration2() throws Exception {
 		this.setAppropriatePermission();
-		Bundle bundle = getContext().installBundle(
+		Bundle bundle = context.installBundle(
 				getWebServer() + "targetb1.jar");
 		final String bundlePid = Util.createPid("bundlePid1");
 		ServiceRegistration<Synchronizer> reg = null;
 		/*
 		 * A. Register ManagedService in advance. Then create Configuration.
 		 */
-		trace("###################### A. testManagedServiceRegistration2.");
+		System.out.println("###################### A. testManagedServiceRegistration2.");
 		try {
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
 			this.startTargetBundle(bundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count = 0;
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME,
 					++count);
-			assertTrue(
-					"ManagedService MUST be called back even if no configuration.",
-					calledback);
-			assertNull("called back with null props", sync.getProps());
+			assertThat(calledback).as("ManagedService MUST be called back even if no configuration.").isTrue();
+			assertThat(sync.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(bundlePid,
 					bundle.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
-			assertFalse("ManagedService must NOT be called back", calledback);
+			assertThat(calledback).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-A");
+			props.put("StringKey", testMethodName + "-A");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
 
-			assertNotNull("null props must be called back", sync.getProps());
+			assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 			props = sync.getProps();
-			assertEquals("pid", bundlePid, props.get(Constants.SERVICE_PID));
-			assertEquals("pid", getName() + "-A", props.get("StringKey"));
-			assertNull("bundleLocation must be not included",
-					props.get("service.bundleLocation"));
-			assertEquals("Size of props must be 2", 2, props.size());
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid);
+			assertThat(props.get("StringKey")).as("pid").isEqualTo(testMethodName + "-A");
+			assertThat(props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+			assertThat(props.size()).as("Size of props must be 2").isEqualTo(2);
 
 			/* stop and restart target bundle */
 			bundle.stop();
 			bundle.start();
-			trace("The target bundle has been started. Wait for signal.");
+			System.out.println("The target bundle has been started. Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
 			// printoutPropertiesForDebug(sync);
 
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
-			assertNull("called back with null props", sync.getProps());
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			assertThat(sync.getProps()).as("called back with null props").isNull();
 			Configuration[] confs = cm.listConfigurations(null);
-            assertTrue("confs must be empty:", confs == null
-                || (existingConfigs.size() > 0 && confs.length == existingConfigs.size()));
+            assertThat(confs == null
+                || (existingConfigs.size() > 0 && confs.length == existingConfigs.size())).as("confs must be empty:").isTrue();
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -2723,32 +2678,30 @@ public class CMControl extends DefaultTestBundleControl {
 		 * with different location and null props (3)setBundleLocation to the
 		 * target bundle.
 		 */
-		trace("###################### B1. testManagedServiceRegistration2.");
+		System.out.println("###################### B1. testManagedServiceRegistration2.");
 		try {
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
 			this.startTargetBundle(bundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count = 0;
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME,
 					++count);
-			assertTrue(
-					"ManagedService must be called back even if no configuration.",
-					calledback);
-			assertNull("called back with null props", sync.getProps());
+			assertThat(calledback).as("ManagedService must be called back even if no configuration.").isTrue();
+			assertThat(sync.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration with different location is being created ");
+			System.out.println("The configuration with different location is being created ");
 			Configuration conf = cm.getConfiguration(bundlePid,
 					neverlandLocation);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
 			this.printoutPropertiesForDebug(sync);
-			assertFalse("ManagedService must NOT be called back", calledback);
+			assertThat(calledback).as("ManagedService must NOT be called back").isFalse();
 			/* The conf has null props. */
-			trace("The configuration is being set to the target bundle");
+			System.out.println("The configuration is being set to the target bundle");
 			conf.setBundleLocation(bundle.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
 
 			/*
@@ -2760,51 +2713,48 @@ public class CMControl extends DefaultTestBundleControl {
 			 */
 			if (calledback) {
 				count++;
-				assertNull(
-						"The props called back MUST be null, if the ManagedService is called back.",
-						sync.getProps());
+				assertThat(sync.getProps()).as("The props called back MUST be null, if the ManagedService is called back.").isNull();
 			}
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-B1");
+			props.put("StringKey", testMethodName + "-B1");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
-			assertNotNull("null props must be called back", sync.getProps());
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 			props = sync.getProps();
-			assertEquals("pid", bundlePid, props.get(Constants.SERVICE_PID));
-			assertEquals("pid", getName() + "-B1", props.get("StringKey"));
-			assertNull("bundleLocation must be not included",
-					props.get("service.bundleLocation"));
-			assertEquals("Size of props must be 2", 2, props.size());
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid);
+			assertThat(props.get("StringKey")).as("pid").isEqualTo(testMethodName + "-B1");
+			assertThat(props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+			assertThat(props.size()).as("Size of props must be 2").isEqualTo(2);
 
-			trace("The configuration is being updated to null.");
+			System.out.println("The configuration is being updated to null.");
 			/* props is reset */
 			conf.update(new Hashtable<String,Object>(0));
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
-			assertNotNull("null props must be called back", sync.getProps());
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 			props = sync.getProps();
-			assertEquals("pid", bundlePid, props.get(Constants.SERVICE_PID));
-			assertEquals("Size of props must be 1", 1, props.size());
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid);
+			assertThat(props.size()).as("Size of props must be 1").isOne();
 			conf.update(props);
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
 
-			trace("The configuration is being set to different location");
+			System.out.println("The configuration is being set to different location");
 			conf.setBundleLocation(neverlandLocation);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
-			assertNull("called back with null props", sync.getProps());
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			assertThat(sync.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertFalse("ManagedService must Not be called back", calledback);
+			assertThat(calledback).as("ManagedService must Not be called back").isFalse();
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -2817,43 +2767,39 @@ public class CMControl extends DefaultTestBundleControl {
 		 * props. (2) Register ManagedService. (3)setBundleLocation to the
 		 * target bundle.
 		 */
-		trace("###################### B2. testManagedServiceRegistration2.");
+		System.out.println("###################### B2. testManagedServiceRegistration2.");
 		try {
-			trace("The configuration with different location is being created ");
+			System.out.println("The configuration with different location is being created ");
 			Configuration conf = cm.getConfiguration(bundlePid,
 					neverlandLocation);
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-B2");
+			props.put("StringKey", testMethodName + "-B2");
 			conf.update(props);
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
 			this.startTargetBundle(bundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 
 			int count = 0;
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME,
 					++count);
-			//assertFalse(
-			//		"ManagedService must NOT be called back even if no configuration.",
-			//		calledback);
-			assertTrue(
-					"ManagedService MUST be called back with null parameter when there is no configuration.",
-					calledback);
+			//assertThat(//		calledback).as(//		"ManagedService must NOT be called back even if no configuration.").isFalse();
+			assertThat(calledback).as("ManagedService MUST be called back with null parameter when there is no configuration.").isTrue();
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			props.put("StringKey", "stringvalue2");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
 			this.printoutPropertiesForDebug(sync);
-			assertFalse("ManagedService must NOT be called back", calledback);
+			assertThat(calledback).as("ManagedService must NOT be called back").isFalse();
 
 			/* The conf has non-null props. */
-			trace("The configuration is being set to the target bundle");
+			System.out.println("The configuration is being set to the target bundle");
 			conf.setBundleLocation(bundle.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
 			/*
 			 * XXX Felix and Ikuo think the ManagedService registered by the
@@ -2862,35 +2808,33 @@ public class CMControl extends DefaultTestBundleControl {
 			 * should not check it because it is unclear in the spec of version
 			 * 1.3.
 			 */
-			// assertTrue("ManagedService must be called back", calledback);
-			// assertFalse("ManagedService must NOT be called back",
-			// calledback);
+			// assertThat(calledback).as("ManagedService must be called back").isTrue();
+			// assertThat(// calledback).as("ManagedService must NOT be called back").isFalse();
 			if (calledback) {
 				++count;
-				assertNotNull("null props must be called back", sync.getProps());
+				assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 				props = sync.getProps();
-				assertEquals("pid", bundlePid, props.get(Constants.SERVICE_PID));
-				assertEquals("pid", "stringvalue2", props.get("StringKey"));
-				assertEquals("Size of props must be 2", 2, props.size());
+				assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid);
+				assertThat(props.get("StringKey")).as("pid").isEqualTo("stringvalue2");
+				assertThat(props.size()).as("Size of props must be 2").isEqualTo(2);
 			}
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			props.put("StringKey", "stringvalue3");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
-			assertNotNull("null props must be called back", sync.getProps());
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 			props = sync.getProps();
-			assertEquals("pid", bundlePid, props.get(Constants.SERVICE_PID));
-			assertEquals("pid", "stringvalue3", props.get("StringKey"));
-			assertNull("bundleLocation must be not included",
-					props.get("service.bundleLocation"));
-			assertEquals("Size of props must be 2", 2, props.size());
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid);
+			assertThat(props.get("StringKey")).as("pid").isEqualTo("stringvalue3");
+			assertThat(props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+			assertThat(props.size()).as("Size of props must be 2").isEqualTo(2);
 
-			trace("The configuration is being set to different location");
+			System.out.println("The configuration is being set to different location");
 			conf.setBundleLocation(neverlandLocation);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
 			/*
 			 * XXX Felix and Ikuo think the ManagedService registered by the
@@ -2899,16 +2843,16 @@ public class CMControl extends DefaultTestBundleControl {
 			 * not check it strictly because it is unclear in the spec of
 			 * version 1.3.
 			 */
-			// assertTrue("ManagedService must be called back", calledback);
+			// assertThat(calledback).as("ManagedService must be called back").isTrue();
 			if (calledback) {
 				++count;
-				assertNull("called back with null props", sync.getProps());
+				assertThat(sync.getProps()).as("called back with null props").isNull();
 			}
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertFalse("ManagedService must Not be called back", calledback);
+			assertThat(calledback).as("ManagedService must Not be called back").isFalse();
 
 		} finally {
 			if (reg != null)
@@ -2922,56 +2866,51 @@ public class CMControl extends DefaultTestBundleControl {
 		 * (2) Register ManagedService. (3)setBundleLocation to the target
 		 * bundle.
 		 */
-		trace("###################### B3. testManagedServiceRegistration2.");
+		System.out.println("###################### B3. testManagedServiceRegistration2.");
 		try {
-			trace("The configuration with different location is being created ");
+			System.out.println("The configuration with different location is being created ");
 			Configuration conf = cm.getConfiguration(bundlePid,
 					neverlandLocation);
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
 			this.startTargetBundle(bundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 
 			int count = 0;
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME,
 					++count);
-			//assertFalse(
-			//		"ManagedService must NOT be called back even if no configuration.",
-			//		calledback);
-			assertTrue(
-					"ManagedService MUST be called back with null parameter when there is no configuration.",
-					calledback);
-			assertNull("called back with null props", sync.getProps());
+			//assertThat(//		calledback).as(//		"ManagedService must NOT be called back even if no configuration.").isFalse();
+			assertThat(calledback).as("ManagedService MUST be called back with null parameter when there is no configuration.").isTrue();
+			assertThat(sync.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-B3");
+			props.put("StringKey", testMethodName + "-B3");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
 			this.printoutPropertiesForDebug(sync);
-			assertFalse("ManagedService must NOT be called back", calledback);
+			assertThat(calledback).as("ManagedService must NOT be called back").isFalse();
 
 			/* The conf has non-null props. */
-			trace("The configuration is being set to the target bundle");
+			System.out.println("The configuration is being set to the target bundle");
 			conf.setBundleLocation(bundle.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
-			assertNotNull("null props must be called back", sync.getProps());
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 			props = sync.getProps();
-			assertEquals("pid", bundlePid, props.get(Constants.SERVICE_PID));
-			assertEquals("pid", getName() + "-B3", props.get("StringKey"));
-			assertNull("bundleLocation must be not included",
-					props.get("service.bundleLocation"));
-			assertEquals("Size of props must be 2", 2, props.size());
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid);
+			assertThat(props.get("StringKey")).as("pid").isEqualTo(testMethodName + "-B3");
+			assertThat(props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+			assertThat(props.size()).as("Size of props must be 2").isEqualTo(2);
 
-			trace("The configuration is being set to different location");
+			System.out.println("The configuration is being set to different location");
 			conf.setBundleLocation(neverlandLocation);
 
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
 			/*
 			 * XXX Felix and Ikuo think the ManagedService registered by the
@@ -2980,16 +2919,16 @@ public class CMControl extends DefaultTestBundleControl {
 			 * not check it strictly because it is unclear in the spec of
 			 * version 1.3.
 			 */
-			// assertTrue("ManagedService must be called back", calledback);
+			// assertThat(calledback).as("ManagedService must be called back").isTrue();
 			if (calledback) {
 				++count;
-				assertNull("called back with null props", sync.getProps());
+				assertThat(sync.getProps()).as("called back with null props").isNull();
 			}
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertFalse("ManagedService must NOT be called back", calledback);
+			assertThat(calledback).as("ManagedService must NOT be called back").isFalse();
 
 		} finally {
 			if (reg != null)
@@ -3009,50 +2948,46 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
 			int count = 0;
 			SynchronizerImpl sync = new SynchronizerImpl();
-			reg = getContext().registerService(Synchronizer.class,
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
 			this.startTargetBundle(bundle);
 
 			/* restart where no configuration. */
-			trace("Wait for restart cm bundle.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			System.out.println("Wait for restart cm bundle.");
+			settle(SIGNAL_WAITING_TIME);
 			startCmBundle(cmBundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME,
 					++count);
-			assertTrue(
-					"ManagedService is Called back even if no configuration.",
-					calledback);
+			assertThat(calledback).as("ManagedService is Called back even if no configuration.").isTrue();
 
 			this.cm = getService(ConfigurationAdmin.class);
 
 			/* Create configuration and stop/start cm. */
 			Configuration conf = cm.getConfiguration(bundlePid,
 					bundle.getLocation());
-			assertNotNull(conf);
+			assertThat(conf).isNotNull();
             cmBundle = stopCmBundle();
-			trace("Wait for restart cm bundle.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			System.out.println("Wait for restart cm bundle.");
+			settle(SIGNAL_WAITING_TIME);
 			startCmBundle(cmBundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService is Called back.", calledback);
+			assertThat(calledback).as("ManagedService is Called back.").isTrue();
 			this.cm = getService(ConfigurationAdmin.class);
 			//conf.delete();
 			cm.getConfiguration(bundlePid).delete();
 
 			/* Create configuration with null location and stop/start cm. */
 			conf = cm.getConfiguration(bundlePid, null);
-			assertNotNull(conf);
+			assertThat(conf).isNotNull();
 			cmBundle = stopCmBundle();
-			trace("Wait for restart cm bundle.");
-			Sleep.sleep(SIGNAL_WAITING_TIME);
+			System.out.println("Wait for restart cm bundle.");
+			settle(SIGNAL_WAITING_TIME);
 			startCmBundle(cmBundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue(
-					"ManagedService is Called back even if configuration with null.",
-					calledback);
+			assertThat(calledback).as("ManagedService is Called back even if configuration with null.").isTrue();
 		} finally {
 			if (reg != null)
 				reg.unregister();
@@ -3068,24 +3003,25 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistrationWithMultiplPIDs()
 			throws Exception {
 		this.setAppropriatePermission();
 
 		try {
-			trace("########## 1(array) testManagedServiceRegistrationWithMultiplPIDs");
+			System.out.println("########## 1(array) testManagedServiceRegistrationWithMultiplPIDs");
 			System.setProperty(
 					org.osgi.test.cases.cm.shared.Constants.SYSTEMPROP_KEY_MODE,
 					org.osgi.test.cases.cm.shared.Constants.MODE_ARRAY);
 			internalTestRegisterManagedServiceWithMultiplePIDs();
 
-			trace("########## 1(list) testManagedServiceRegistrationWithMultiplPIDs");
+			System.out.println("########## 1(list) testManagedServiceRegistrationWithMultiplPIDs");
 			System.setProperty(
 					org.osgi.test.cases.cm.shared.Constants.SYSTEMPROP_KEY_MODE,
 					org.osgi.test.cases.cm.shared.Constants.MODE_LIST);
 			internalTestRegisterManagedServiceWithMultiplePIDs();
 
-			trace("########## 1(set) testManagedServiceRegistrationWithMultiplPIDs");
+			System.out.println("########## 1(set) testManagedServiceRegistrationWithMultiplPIDs");
 			System.setProperty(
 					org.osgi.test.cases.cm.shared.Constants.SYSTEMPROP_KEY_MODE,
 					org.osgi.test.cases.cm.shared.Constants.MODE_SET);
@@ -3105,81 +3041,79 @@ public class CMControl extends DefaultTestBundleControl {
 		ServiceRegistration<Synchronizer> reg = null;
 		Bundle bundle1 = null;
 		try {
-			bundle1 = getContext().installBundle(
+			bundle1 = context.installBundle(
 					getWebServer() + "targetb1.jar");
 
 			SynchronizerImpl sync = new SynchronizerImpl();
-			trace("1 sync.getCount()=" + sync.getCount());
-			reg = getContext().registerService(Synchronizer.class,
+			System.out.println("1 sync.getCount()=" + sync.getCount());
+			reg = context.registerService(Synchronizer.class,
 					sync, propsForSync1);
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count = 0;
 			boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME,
 					++count);
-			assertTrue(
-					"ManagedService MUST be called back even if no configuration.",
-					calledback);
+			assertThat(calledback).as("ManagedService MUST be called back even if no configuration.").isTrue();
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
 			if (!calledback)
 				--count;
-			trace("sync.getCount()=" + sync.getCount());
-			trace("The configuration1 is being created");
-			trace("sync.getCount()=" + sync.getCount());
+			System.out.println("sync.getCount()=" + sync.getCount());
+			System.out.println("The configuration1 is being created");
+			System.out.println("sync.getCount()=" + sync.getCount());
 			Configuration conf1 = cm.getConfiguration(bundlePid1,
 					bundle1.getLocation());
-			trace("sync.getCount()=" + sync.getCount());
-			trace("Wait for signal.");
+			System.out.println("sync.getCount()=" + sync.getCount());
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
-			assertFalse("ManagedService must NOT be called back", calledback);
+			assertThat(calledback).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration2 is being created");
+			System.out.println("The configuration2 is being created");
 			Configuration conf2 = cm.getConfiguration(bundlePid2,
 					bundle1.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
-			trace("sync.getCount()=" + sync.getCount());
-			assertFalse("ManagedService must NOT be called back", calledback);
+			System.out.println("sync.getCount()=" + sync.getCount());
+			assertThat(calledback).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration1 is being updated ");
+			System.out.println("The configuration1 is being updated ");
 			Dictionary<String,Object> props1 = new Hashtable<>();
 			props1.put("StringKey1", "stringvalue1");
 			conf1.update(props1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			trace("sync.getCount()=" + sync.getCount());
-			assertTrue("ManagedService must be called back", calledback);
-			assertNotNull("null props must be called back", sync.getProps());
+			System.out.println("sync.getCount()=" + sync.getCount());
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 			Dictionary<String,Object> props = sync.getProps();
-			assertEquals("pid", bundlePid1, props.get(Constants.SERVICE_PID));
-			assertEquals("pid", "stringvalue1", props.get("StringKey1"));
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid1);
+			assertThat(props.get("StringKey1")).as("pid").isEqualTo("stringvalue1");
 
-			trace("The configuration2 is being updated ");
+			System.out.println("The configuration2 is being updated ");
 			Dictionary<String,Object> props2 = new Hashtable<>();
 			props2.put("StringKey1", "stringvalue1");
 			props2.put("StringKey2", "stringvalue2");
 			conf2.update(props2);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
 
-			assertNotNull("null props must be called back", sync.getProps());
+			assertThat(sync.getProps()).as("null props must be called back").isNotNull();
 			props = sync.getProps();
-			assertEquals("pid", bundlePid2, props.get(Constants.SERVICE_PID));
-			assertEquals("pid", "stringvalue1", props.get("StringKey1"));
-			assertEquals("pid", "stringvalue2", props.get("StringKey2"));
-			assertEquals("Size of props must be 3", 3, props.size());
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isEqualTo(bundlePid2);
+			assertThat(props.get("StringKey1")).as("pid").isEqualTo("stringvalue1");
+			assertThat(props.get("StringKey2")).as("pid").isEqualTo("stringvalue2");
+			assertThat(props.size()).as("Size of props must be 3").isEqualTo(3);
 
-			trace("The configuration1 is being deleted ");
+			System.out.println("The configuration1 is being deleted ");
 			conf1.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
-			trace("The configuration2 is being deleted ");
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
+			System.out.println("The configuration2 is being deleted ");
 			conf2.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-			assertTrue("ManagedService must be called back", calledback);
+			assertThat(calledback).as("ManagedService must be called back").isTrue();
 		} catch (RuntimeException e) {
 			e.printStackTrace();
 			throw e;
@@ -3198,10 +3132,11 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistrationDuplicatedTargets()
 			throws Exception {
 		this.setAppropriatePermission();
-		Bundle bundle2 = getContext().installBundle(
+		Bundle bundle2 = context.installBundle(
 				getWebServer() + "targetb2.jar");
 
 		final String bundlePid = Util.createPid("bundlePid1");
@@ -3211,51 +3146,49 @@ public class CMControl extends DefaultTestBundleControl {
 		 * A. One bundle registers duplicated ManagedService. Both of them must
 		 * be called back.
 		 */
-		trace("################## A testManagedServiceRegistrationDuplicatedTargets()");
+		System.out.println("################## A testManagedServiceRegistrationDuplicatedTargets()");
 		try {
 			SynchronizerImpl sync2 = new SynchronizerImpl();
-			reg2 = getContext().registerService(Synchronizer.class,
+			reg2 = context.registerService(Synchronizer.class,
 					sync2, propsForSync2);
 			System.setProperty(
 					org.osgi.test.cases.cm.shared.Constants.SYSTEMPROP_KEY_DUPCOUNT,
 					"2");
 			this.startTargetBundle(bundle2);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 2);
-			assertTrue(
-					"Both ManagedService MUST be called back even if no configuration.",
-					calledback2);
-			assertNull("called back with null props", sync2.getProps());
+			assertThat(calledback2).as("Both ManagedService MUST be called back even if no configuration.").isTrue();
+			assertThat(sync2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(bundlePid,
 					bundle2.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 3);
-			assertFalse("ManagedService must NOT be called back", calledback2);
+			assertThat(calledback2).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-A");
+			props.put("StringKey", testMethodName + "-A");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 4);
-			assertTrue("Both ManagedService must be called back", calledback2);
+			assertThat(calledback2).as("Both ManagedService must be called back").isTrue();
 
 			/* stop and restart target bundle */
 			bundle2.stop();
 			bundle2.start();
-			trace("The target bundle has been stopped and re-started. Wait for signal.");
+			System.out.println("The target bundle has been stopped and re-started. Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 6);
-			assertTrue("Both ManagedService must be called back", calledback2);
+			assertThat(calledback2).as("Both ManagedService must be called back").isTrue();
 			// printoutPropertiesForDebug(sync);
 
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 8);
-			assertTrue("Both ManagedService must be called back", calledback2);
-			assertNull("null props must be called back", sync2.getProps());
+			assertThat(calledback2).as("Both ManagedService must be called back").isTrue();
+			assertThat(sync2.getProps()).as("null props must be called back").isNull();
 		} finally {
 			if (reg2 != null)
 				reg2.unregister();
@@ -3270,72 +3203,66 @@ public class CMControl extends DefaultTestBundleControl {
 		 * ManagedService. ==> Only one, firstly registered, must be called
 		 * back.
 		 */
-		trace("################## B1 testManagedServiceRegistrationDuplicatedTargets()");
+		System.out.println("################## B1 testManagedServiceRegistrationDuplicatedTargets()");
 
 		reg2 = null;
 		ServiceRegistration<Synchronizer> reg1 = null;
-		Bundle bundle1 = getContext().installBundle(
+		Bundle bundle1 = context.installBundle(
 				getWebServer() + "targetb1.jar");
 		System.setProperty(
 				org.osgi.test.cases.cm.shared.Constants.SYSTEMPROP_KEY_DUPCOUNT,
 				"1");
-		bundle2 = getContext().installBundle(getWebServer() + "targetb2.jar");
+		bundle2 = context.installBundle(getWebServer() + "targetb2.jar");
 		try {
 			SynchronizerImpl sync2 = new SynchronizerImpl("ID2");
-			reg2 = getContext().registerService(Synchronizer.class,
+			reg2 = context.registerService(Synchronizer.class,
 					sync2, propsForSync2);
 			this.startTargetBundle(bundle2);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 1);
-			assertTrue(
-					"ManagedService MUST be called back even if no configuration.",
-					calledback2);
-			assertNull("null props must be called back", sync2.getProps());
+			assertThat(calledback2).as("ManagedService MUST be called back even if no configuration.").isTrue();
+			assertThat(sync2.getProps()).as("null props must be called back").isNull();
 
 			SynchronizerImpl sync1 = new SynchronizerImpl("ID1");
-			reg1 = getContext().registerService(Synchronizer.class,
+			reg1 = context.registerService(Synchronizer.class,
 					sync1, propsForSync1);
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			boolean calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, 1);
-			assertTrue(
-					"ManagedService MUST be called back even if no configuration.",
-					calledback1);
+			assertThat(calledback1).as("ManagedService MUST be called back even if no configuration.").isTrue();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration[] confs = cm.listConfigurations(null);
-            assertTrue("confs must be empty:", confs == null
-                || (existingConfigs.size() > 0 && confs.length == existingConfigs.size()));
+            assertThat(confs == null
+                || (existingConfigs.size() > 0 && confs.length == existingConfigs.size())).as("confs must be empty:").isTrue();
 			Configuration conf = cm.getConfiguration(bundlePid,
 					bundle2.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 2);
 			this.printoutPropertiesForDebug(sync2);
 
-			assertFalse("ManagedService must NOT be called back", calledback2);
+			assertThat(calledback2).as("ManagedService must NOT be called back").isFalse();
 			calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, 2);
-			assertFalse("ManagedService must NOT be called back", calledback1);
+			assertThat(calledback1).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-B1");
+			props.put("StringKey", testMethodName + "-B1");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 2);
-			assertTrue("ManagedService firstly registered must be called back",
-					calledback2);
+			assertThat(calledback2).as("ManagedService firstly registered must be called back").isTrue();
 			calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, 2);
-			assertFalse("ManagedService must NOT be called back", calledback1);
+			assertThat(calledback1).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, 3);
-			assertTrue("ManagedService firstly registered must be called back",
-					calledback2);
-			assertNull("null props must be called back", sync2.getProps());
+			assertThat(calledback2).as("ManagedService firstly registered must be called back").isTrue();
+			assertThat(sync2.getProps()).as("null props must be called back").isNull();
 			calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, 2);
-			assertFalse("ManagedService must NOT be called back", calledback1);
+			assertThat(calledback1).as("ManagedService must NOT be called back").isFalse();
 
 		} finally {
 			if (reg1 != null)
@@ -3358,71 +3285,64 @@ public class CMControl extends DefaultTestBundleControl {
 		 * duplicated ManagedService. ==> Only one, firstly registered, must be
 		 * called back.
 		 */
-		trace("################## B2 testManagedServiceRegistrationDuplicatedTargets()");
+		System.out.println("################## B2 testManagedServiceRegistrationDuplicatedTargets()");
 
 		reg2 = null;
 		reg1 = null;
-		bundle1 = getContext().installBundle(getWebServer() + "targetb1.jar");
+		bundle1 = context.installBundle(getWebServer() + "targetb1.jar");
 		System.setProperty(
 				org.osgi.test.cases.cm.shared.Constants.SYSTEMPROP_KEY_DUPCOUNT,
 				"1");
-		bundle2 = getContext().installBundle(getWebServer() + "targetb2.jar");
+		bundle2 = context.installBundle(getWebServer() + "targetb2.jar");
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(bundlePid,
 					bundle2.getLocation());
 			SynchronizerImpl sync2 = new SynchronizerImpl("ID2");
-			reg2 = getContext().registerService(Synchronizer.class,
+			reg2 = context.registerService(Synchronizer.class,
 					sync2, propsForSync2);
 			this.startTargetBundle(bundle2);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count2 = 0;
 			boolean calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME,
 					++count2);
-			assertTrue(
-					"ManagedService MUST be called back even if configuration has no props.",
-					calledback2);
-			assertNull("null props must be called back", sync2.getProps());
+			assertThat(calledback2).as("ManagedService MUST be called back even if configuration has no props.").isTrue();
+			assertThat(sync2.getProps()).as("null props must be called back").isNull();
 
 			SynchronizerImpl sync1 = new SynchronizerImpl("ID1");
-			reg1 = getContext().registerService(Synchronizer.class,
+			reg1 = context.registerService(Synchronizer.class,
 					sync1, propsForSync1);
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1 = 0;
 			boolean calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME,
 					++count1);
-			//assertFalse("ManagedService MUST NOT be called back even.",
-			//		calledback1);
-			assertTrue(
-					"ManagedService MUST be called back even if deffirent bound location.",
-					calledback1);
-			assertNull("null props must be called back", sync1.getProps());
+			//assertThat(//		calledback1).as("ManagedService MUST NOT be called back even.").isFalse();
+			assertThat(calledback1).as("ManagedService MUST be called back even if deffirent bound location.").isTrue();
+			assertThat(sync1.getProps()).as("null props must be called back").isNull();
 
 			Configuration[] confs = cm.listConfigurations(null);
-            assertTrue("confs must be empty:", confs == null
-                || (existingConfigs.size() > 0 && confs.length == existingConfigs.size()));
+            assertThat(confs == null
+                || (existingConfigs.size() > 0 && confs.length == existingConfigs.size())).as("confs must be empty:").isTrue();
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-B2");
+			props.put("StringKey", testMethodName + "-B2");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, ++count2);
-			assertTrue("ManagedService firstly registered must be called back",
-					calledback2);
+			assertThat(calledback2).as("ManagedService firstly registered must be called back").isTrue();
 			calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, count1 + 1);
-			assertFalse("ManagedService must NOT be called back", calledback1);
+			assertThat(calledback1).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, ++count2);
-			assertTrue("ManagedService firstly registered must be called back",
-					calledback2);
-			assertNull("null props must be called back", sync2.getProps());
+			assertThat(calledback2).as("ManagedService firstly registered must be called back").isTrue();
+			assertThat(sync2.getProps()).as("null props must be called back").isNull();
 			calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, count1 + 1);
-			assertFalse("ManagedService must NOT be called back", calledback1);
+			assertThat(calledback1).as("ManagedService must NOT be called back").isFalse();
 
 		} finally {
 			if (reg1 != null)
@@ -3444,69 +3364,65 @@ public class CMControl extends DefaultTestBundleControl {
 		 * duplicated ManagedService. ==> Only one, firstly registered, must be
 		 * called back.
 		 */
-		trace("################## B3 testManagedServiceRegistrationDuplicatedTargets()");
+		System.out.println("################## B3 testManagedServiceRegistrationDuplicatedTargets()");
 
 		reg2 = null;
 		reg1 = null;
-		bundle1 = getContext().installBundle(getWebServer() + "targetb1.jar");
+		bundle1 = context.installBundle(getWebServer() + "targetb1.jar");
 		System.setProperty(
 				org.osgi.test.cases.cm.shared.Constants.SYSTEMPROP_KEY_DUPCOUNT,
 				"1");
-		bundle2 = getContext().installBundle(getWebServer() + "targetb2.jar");
+		bundle2 = context.installBundle(getWebServer() + "targetb2.jar");
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(bundlePid,
 					bundle2.getLocation());
 			Dictionary<String,Object> props = new Hashtable<>();
-			props.put("StringKey", getName() + "-B3");
+			props.put("StringKey", testMethodName + "-B3");
 			conf.update(props);
 			SynchronizerImpl sync2 = new SynchronizerImpl("ID2");
-			reg2 = getContext().registerService(Synchronizer.class,
+			reg2 = context.registerService(Synchronizer.class,
 					sync2, propsForSync2);
 			this.startTargetBundle(bundle2);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count2 = 0;
 			boolean calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME,
 					++count2);
-			assertTrue("ManagedService MUST be called back.", calledback2);
-			assertNotNull("called back with null props", sync2.getProps());
+			assertThat(calledback2).as("ManagedService MUST be called back.").isTrue();
+			assertThat(sync2.getProps()).as("called back with null props").isNotNull();
 
 			SynchronizerImpl sync1 = new SynchronizerImpl("ID1");
-			reg1 = getContext().registerService(Synchronizer.class,
+			reg1 = context.registerService(Synchronizer.class,
 					sync1, propsForSync1);
 			this.startTargetBundle(bundle1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1 = 0;
 			boolean calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME,
 					++count1);
-			//assertFalse("ManagedService MUST NOT be called back.", calledback1);
-			assertTrue(
-					"ManagedService MUST be called back even if deffirent bound location.",
-					calledback1);
-			assertNull("null props must be called back", sync1.getProps());
+			//assertThat(calledback1).as("ManagedService MUST NOT be called back.").isFalse();
+			assertThat(calledback1).as("ManagedService MUST be called back even if deffirent bound location.").isTrue();
+			assertThat(sync1.getProps()).as("null props must be called back").isNull();
 
 			Configuration[] confs = cm.listConfigurations(null);
-			assertNotNull("confs must NOT be empty:", confs);
+			assertThat(confs).as("confs must NOT be empty:").isNotNull();
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			props.put("StringKey2", "stringvalue2");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, ++count2);
-			assertTrue("ManagedService firstly registered must be called back",
-					calledback2);
+			assertThat(calledback2).as("ManagedService firstly registered must be called back").isTrue();
 			calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, count1 + 1);
-			assertFalse("ManagedService must NOT be called back", calledback1);
+			assertThat(calledback1).as("ManagedService must NOT be called back").isFalse();
 
-			trace("The configuration is being deleted ");
+			System.out.println("The configuration is being deleted ");
 			conf.delete();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			calledback2 = sync2.waitForSignal(SIGNAL_WAITING_TIME, ++count2);
-			assertTrue("ManagedService firstly registered must be called back",
-					calledback2);
-			assertNull("null props must be called back", sync2.getProps());
+			assertThat(calledback2).as("ManagedService firstly registered must be called back").isTrue();
+			assertThat(sync2.getProps()).as("null props must be called back").isNull();
 			calledback1 = sync1.waitForSignal(SIGNAL_WAITING_TIME, count1 + 1);
-			assertFalse("ManagedService must NOT be called back", calledback1);
+			assertThat(calledback1).as("ManagedService must NOT be called back").isFalse();
 
 		} finally {
 			if (reg1 != null)
@@ -3525,7 +3441,7 @@ public class CMControl extends DefaultTestBundleControl {
 	}
 
     private Bundle stopCmBundle() {
-		ServiceReference<ConfigurationAdmin> reference = this.getContext()
+		ServiceReference<ConfigurationAdmin> reference = this.context
 				.getServiceReference(ConfigurationAdmin.class);
         Bundle cmBundle = reference.getBundle();
         try {
@@ -3565,13 +3481,14 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.getProperties()
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedProperties() throws Exception {
 		String pid = Util.createPid("somepid");
 		/* Set up the configuration */
 		Configuration conf = cm.getConfiguration(pid);
 		/* Put all legal types in the properties and update */
 		Hashtable<String,Object> props = new Hashtable<>();
-		props.put("StringKey", getName());
+		props.put("StringKey", testMethodName);
 		props.put("IntegerKey", Integer.valueOf(12));
 		props.put("LongKey", Long.valueOf(-29));
 		props.put("FloatKey", Float.valueOf(921.14f));
@@ -3584,7 +3501,7 @@ public class CMControl extends DefaultTestBundleControl {
 		props.put("BooleanKey", Boolean.valueOf(true));
 
 		Collection<Object> v = new ArrayList<>();
-		v.add(getName());
+		v.add(testMethodName);
 		// ### is now invalid ....
 		// v.addElement(Integer.valueOf(12));
 		// v.addElement(Long.valueOf(-29));
@@ -3648,7 +3565,7 @@ public class CMControl extends DefaultTestBundleControl {
 
 		/* Check if the properties are case independent */
 		String s = (String) msprops.get("sTringkeY");
-		assertEquals("case independant properties", getName(), s);
+		assertThat(s).as("case independant properties").isEqualTo(testMethodName);
 		Hashtable<String,Object> illegalprops = new Hashtable<>();
 		illegalprops.put("exception", new Exception());
 		String message = "Exception is not a legal type";
@@ -3656,7 +3573,7 @@ public class CMControl extends DefaultTestBundleControl {
 			conf.update(illegalprops);
 			/* A IllegalArgumentException should have been thrown */
 			failException(message, IllegalArgumentException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			/* Check that we got the correct exception */
@@ -3685,6 +3602,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.getBundleLocation()
 	 * @throws Exception
 	 */
+	@Test
 	public void testCreateFactoryConfiguration() throws Exception {
 		commonTestCreateFactoryConfiguration(false, getLocation());
 	}
@@ -3700,6 +3618,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.getBundleLocation()
 	 * @throws Exception
 	 */
+	@Test
 	public void testCreateFactoryConfigurationWithLocation() throws Exception {
 		commonTestCreateFactoryConfiguration(true, neverlandLocation);
 	}
@@ -3715,6 +3634,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.getBundleLocation()
 	 * @throws Exception
 	 */
+	@Test
 	public void testCreateFactoryConfigurationWithNullLocation()
 			throws Exception {
 		commonTestCreateFactoryConfiguration(true, null);
@@ -3726,6 +3646,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 * @since 1.6
 	 */
+	@Test
 	public void testGetFactoryConfigurationWithName() throws Exception {
 		final int NUMBER_OF_CONFIGS = 3;
 		final String factorypid = Util.createPid("factorypidforname");
@@ -3741,42 +3662,36 @@ public class CMControl extends DefaultTestBundleControl {
 			props.put("val", String.valueOf(i));
 			conf.update(props);
 			configs.add(conf);
-			trace("pid: " + conf.getPid());
-			assertTrue("Unique pid", !pids.contains(conf.getPid()));
-			assertEquals("Correct factory pid", factorypid,
-					conf.getFactoryPid());
-			assertEquals("Correct pid", factorypid + "~" + String.valueOf(i),
-					conf.getPid());
-			assertEquals("Correct location", null,
-					getBundleLocationForCompare(conf));
+			System.out.println("pid: " + conf.getPid());
+			assertThat(!pids.contains(conf.getPid())).as("Unique pid").isTrue();
+			assertThat(conf.getFactoryPid()).as("Correct factory pid").isEqualTo(factorypid);
+			assertThat(conf.getPid()).as("Correct pid").isEqualTo(factorypid + "~" + String.valueOf(i));
+			assertThat(getBundleLocationForCompare(conf)).as("Correct location").isEqualTo(null);
 
 			pids.add(conf.getPid());
 		}
-		assertEquals(NUMBER_OF_CONFIGS, cm
-				.listConfigurations(
-						"(service.factoryPid=" + factorypid + ")").length);
+		assertThat(cm
+			.listConfigurations(
+				"(service.factoryPid=" + factorypid + ")")).hasSize(NUMBER_OF_CONFIGS);
 		for (int i = 0; i < configs.size(); i++) {
 			Configuration[] cfgs = cm.listConfigurations(
 					"(service.pid=" + configs.get(i).getPid() + ")");
-			assertEquals(1, cfgs.length);
-			assertEquals(configs.get(i).getFactoryPid(),
-					cfgs[0].getFactoryPid());
-			assertEquals(configs.get(i).getPid(), cfgs[0].getPid());
+			assertThat(cfgs).hasSize(1);
+			assertThat(cfgs[0].getFactoryPid()).isEqualTo(configs.get(i).getFactoryPid());
+			assertThat(cfgs[0].getPid()).isEqualTo(configs.get(i).getPid());
 		}
 		// get factory configuration with same name again
 		for (int i = 0; i < NUMBER_OF_CONFIGS; i++) {
 			Configuration conf = cm.getFactoryConfiguration(factorypid,
 					String.valueOf(i), null);
-			assertEquals("Correct factory pid", factorypid,
-					conf.getFactoryPid());
-			assertEquals("Correct pid", factorypid + "~" + String.valueOf(i),
-					conf.getPid());
-			assertEquals(String.valueOf(i), conf.getProperties().get("val"));
+			assertThat(conf.getFactoryPid()).as("Correct factory pid").isEqualTo(factorypid);
+			assertThat(conf.getPid()).as("Correct pid").isEqualTo(factorypid + "~" + String.valueOf(i));
+			assertThat(conf.getProperties().get("val")).isEqualTo(String.valueOf(i));
 		}
 		// and verify count of factory configurations
 		// (should still be NUMBER_OF_CONFIGS)
-		assertEquals(NUMBER_OF_CONFIGS, cm.listConfigurations(
-				"(service.factoryPid=" + factorypid + ")").length);
+		assertThat(cm.listConfigurations(
+			"(service.factoryPid=" + factorypid + ")")).hasSize(NUMBER_OF_CONFIGS);
 
 		// delete configurations
 		for (int i = 0; i < configs.size(); i++) {
@@ -3787,10 +3702,10 @@ public class CMControl extends DefaultTestBundleControl {
 		for (final String p : pids) {
 			Configuration[] cfgs = cm.listConfigurations(
 					"(service.pid=" + p + ")");
-			assertNull(cfgs);
+			assertThat(cfgs).isNull();
 		}
-		assertNull(cm
-				.listConfigurations("(service.factoryPid=" + factorypid + ")"));
+		assertThat(cm
+				.listConfigurations("(service.factoryPid=" + factorypid + ")")).isNull();
 	}
 
 	/**
@@ -3799,6 +3714,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 * @since 1.6
 	 */
+	@Test
 	public void testRepeatedGetFactoryConfigurationWithName() throws Exception {
 		final String factorypid = Util.createPid("factorypidforname");
 		final String factoryname = "aname";
@@ -3817,19 +3733,17 @@ public class CMControl extends DefaultTestBundleControl {
 		props2.put("val", "2");
 		conf2.update(props2);
 
-		assertEquals("2",
-				cm.getFactoryConfiguration(factorypid, factoryname, null)
+		assertThat(cm.getFactoryConfiguration(factorypid, factoryname, null)
 						.getProperties()
-						.get("val"));
+						.get("val")).isEqualTo("2");
 
 		final Dictionary<String,Object> props22 = new Hashtable<>();
 		props22.put("val", "22");
 		conf2.update(props22);
 
-		assertEquals("22",
-				cm.getFactoryConfiguration(factorypid, factoryname, null)
+		assertThat(cm.getFactoryConfiguration(factorypid, factoryname, null)
 						.getProperties()
-						.get("val"));
+						.get("val")).isEqualTo("22");
 	}
 
 	private void commonTestCreateFactoryConfiguration(boolean withLocation,
@@ -3858,7 +3772,7 @@ public class CMControl extends DefaultTestBundleControl {
 					 */
 					if (System.getSecurityManager() != null)
 						failException(message, SecurityException.class);
-				} catch (AssertionFailedError e) {
+				} catch (AssertionError e) {
 					throw e;
 				} catch (Throwable e) {
 					/* Check that we got the correct exception */
@@ -3879,13 +3793,11 @@ public class CMControl extends DefaultTestBundleControl {
 				conf = cm.createFactoryConfiguration(factorypid);
 			}
 			configs.add(conf);
-			trace("pid: " + conf.getPid());
-			assertTrue("Unique pid", !pids.contains(conf.getPid()));
-			assertEquals("Correct factory pid", factorypid,
-					conf.getFactoryPid());
-			assertNull("No properties", conf.getProperties());
-			assertEquals("Correct location", location,
-					getBundleLocationForCompare(conf));
+			System.out.println("pid: " + conf.getPid());
+			assertThat(!pids.contains(conf.getPid())).as("Unique pid").isTrue();
+			assertThat(conf.getFactoryPid()).as("Correct factory pid").isEqualTo(factorypid);
+			assertThat(conf.getProperties()).as("No properties").isNull();
+			assertThat(getBundleLocationForCompare(conf)).as("Correct location").isEqualTo(location);
 			/* Add the pid to the list */
 			pids.add(conf.getPid());
 		}
@@ -3907,13 +3819,11 @@ public class CMControl extends DefaultTestBundleControl {
 				conf = cm.createFactoryConfiguration(factorypid);
 			}
 			configs.add(conf);
-			trace("pid: " + conf.getPid());
-			assertTrue("Unique pid", !pids.contains(conf.getPid()));
-			assertEquals("Correct factory pid", factorypid,
-					conf.getFactoryPid());
-			assertNull("No properties", conf.getProperties());
-			assertEquals("Correct location", location,
-					this.getBundleLocationForCompare(conf));
+			System.out.println("pid: " + conf.getPid());
+			assertThat(!pids.contains(conf.getPid())).as("Unique pid").isTrue();
+			assertThat(conf.getFactoryPid()).as("Correct factory pid").isEqualTo(factorypid);
+			assertThat(conf.getProperties()).as("No properties").isNull();
+			assertThat(this.getBundleLocationForCompare(conf)).as("Correct location").isEqualTo(location);
 			/* Add the pid to the list */
 			pids.add(conf.getPid());
 		}
@@ -3953,49 +3863,50 @@ public class CMControl extends DefaultTestBundleControl {
 
 	}
 
+	@Test
 	public void testFactoryConfigurationCollision()
 			throws IOException, InvalidSyntaxException, BundleException {
         final String factoryPid = Util.createPid("factoryPid1");
 
         final Configuration cf = cm.createFactoryConfiguration( factoryPid, null );
-        assertNotNull( cf );
+        assertThat(cf).isNotNull();
         final String pid = cf.getPid();
 
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
-        Bundle bundle = getContext().installBundle(getWebServer() + "bundleT1.jar");
+        Bundle bundle = context.installBundle(getWebServer() + "bundleT1.jar");
         try
         {
             SynchronizerImpl sync1_1 = new SynchronizerImpl("F1-1");
-			list.add(getContext().registerService(Synchronizer.class, sync1_1,
+			list.add(context.registerService(Synchronizer.class, sync1_1,
 					propsForSyncF1_1));
 
             this.startTargetBundle(bundle);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			assertNoCallback(sync1_1, count1_1);
 
-            assertNotNull( "Configuration must have PID", pid );
-            assertEquals( "Factory configuration must have requested factory PID", factoryPid, cf.getFactoryPid() );
+            assertThat(pid).as("Configuration must have PID").isNotNull();
+            assertThat(cf.getFactoryPid()).as("Factory configuration must have requested factory PID").isEqualTo(factoryPid);
 
             // assert getConfiguration returns the same configurtion
             final Configuration c1 = cm.getConfiguration( pid, null );
-            assertEquals( "getConfiguration must retrieve required PID", pid, c1.getPid() );
-            assertEquals( "getConfiguration must retrieve new factory configuration", factoryPid, c1.getFactoryPid() );
-            assertNull( "Configuration must not have properties", c1.getProperties() );
+            assertThat(c1.getPid()).as("getConfiguration must retrieve required PID").isEqualTo(pid);
+            assertThat(c1.getFactoryPid()).as("getConfiguration must retrieve new factory configuration").isEqualTo(factoryPid);
+            assertThat(c1.getProperties()).as("Configuration must not have properties").isNull();
 
             assertNoCallback(sync1_1, count1_1);
 
             // restart config admin and verify getConfiguration persisted
             // the new factory configuration as such
             restartCM();
-            assertNotNull( "Config Admin Service missing", cm );
+            assertThat(cm).as("Config Admin Service missing").isNotNull();
 
 			assertNoCallback(sync1_1, count1_1);
 
             final Configuration c2 = cm.getConfiguration( pid, null );
-            assertEquals( "getConfiguration must retrieve required PID", pid, c2.getPid() );
-            assertEquals( "getConfiguration must retrieve new factory configuration from persistence", factoryPid, c2.getFactoryPid() );
-            assertNull( "Configuration must not have properties", c2.getProperties() );
+            assertThat(c2.getPid()).as("getConfiguration must retrieve required PID").isEqualTo(pid);
+            assertThat(c2.getFactoryPid()).as("getConfiguration must retrieve new factory configuration from persistence").isEqualTo(factoryPid);
+            assertThat(c2.getProperties()).as("Configuration must not have properties").isNull();
 
 			Dictionary<String,Object> props = new Hashtable<>();
             props.put("StringKey", "stringvalue");
@@ -4004,14 +3915,14 @@ public class CMControl extends DefaultTestBundleControl {
             count1_1 = assertCallback(sync1_1, count1_1);
 			props = sync1_1.getProps();
 
-            assertEquals( "stringvalue", props.get( "StringKey" ) );
+            assertThat(props.get( "StringKey" )).isEqualTo("stringvalue");
 
             final Configuration[] cfs = cm.listConfigurations( "(" + ConfigurationAdmin.SERVICE_FACTORYPID + "="
                 + factoryPid + ")" );
-            assertNotNull( "Expect at least one configuration", cfs );
-            assertEquals( "Expect exactly one configuration", 1, cfs.length );
-            assertEquals( cf.getPid(), cfs[0].getPid() );
-            assertEquals( cf.getFactoryPid(), cfs[0].getFactoryPid() );
+            assertThat(cfs).as("Expect at least one configuration").isNotNull();
+			assertThat(cfs.length).as("Expect exactly one configuration").isOne();
+            assertThat(cfs[0].getPid()).isEqualTo(cf.getPid());
+            assertThat(cfs[0].getFactoryPid()).isEqualTo(cf.getFactoryPid());
         }
         finally
         {
@@ -4032,6 +3943,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec ManagedServiceFactory.updated(String,Dictionary)
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceFactory() throws Exception {
 		final int NUMBER_OF_CONFIGS = 3;
 		String factorypid = Util.createPid("somefactorypid");
@@ -4042,7 +3954,7 @@ public class CMControl extends DefaultTestBundleControl {
 			Hashtable<String,Object> ht = new Hashtable<>();
 			ht.put("test.field", i + "");
 			conf.update(ht);
-			trace("pid: " + conf.getPid());
+			System.out.println("pid: " + conf.getPid());
 			configs.put(conf.getPid(), conf);
 		}
 		// Create some more factory configurations using names
@@ -4052,7 +3964,7 @@ public class CMControl extends DefaultTestBundleControl {
 			Hashtable<String,Object> ht = new Hashtable<>();
 			ht.put("test.field", String.valueOf(NUMBER_OF_CONFIGS + i) + "");
 			conf.update(ht);
-			trace("pid: " + conf.getPid());
+			System.out.println("pid: " + conf.getPid());
 			configs.put(conf.getPid(), conf);
 		}
 		try {
@@ -4066,11 +3978,11 @@ public class CMControl extends DefaultTestBundleControl {
 			registerService(ManagedServiceFactory.class.getName(), msf,
 					properties);
 			for (int i = 0; i < 2 * NUMBER_OF_CONFIGS; i++) {
-				trace("Wait for signal #" + i);
+				System.out.println("Wait for signal #" + i);
 				semaphore.acquire();
-				trace("Signal #" + i + " arrived");
+				System.out.println("Signal #" + i + " arrived");
 			}
-			trace("All signals have arrived");
+			System.out.println("All signals have arrived");
 		} finally {
 			Enumeration<String> keys = configs.keys();
 			while (keys.hasMoreElements()) {
@@ -4097,6 +4009,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @spec Configuration.update(Dictionary)
 	 * @throws Exception
 	 */
+	@Test
 	public void testUpdateConfigEvent() throws Exception {
 		ConfigurationListenerImpl cl = null;
 		String pid = Util
@@ -4106,28 +4019,26 @@ public class CMControl extends DefaultTestBundleControl {
 		Configuration conf = cm.getConfiguration(pid);
 		Hashtable<String,Object> props = new Hashtable<>();
 		props.put("key", "value1");
-		trace("Create and register a new ConfigurationListener");
+		System.out.println("Create and register a new ConfigurationListener");
 		cl = createConfigurationListener(synchronizer);
 		try {
 			conf.update(props);
-			trace("Wait until the ConfigurationListener has gotten the update");
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-			assertEquals("Config event pid match", pid, cl.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, cl.getType());
-			assertNull("Config Factory event pid null", cl.getFactoryPid());
-			assertNotNull("Config event reference null", cl.getReference());
-			ConfigurationAdmin admin = getContext()
+			System.out.println("Wait until the ConfigurationListener has gotten the update");
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+			assertThat(cl.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(cl.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
+			assertThat(cl.getFactoryPid()).as("Config Factory event pid null").isNull();
+			assertThat(cl.getReference()).as("Config event reference null").isNotNull();
+			ConfigurationAdmin admin = context
 					.getService(cl.getReference());
 			try {
-				assertNotNull("Configuration Admin from event", admin);
+				assertThat(admin).as("Configuration Admin from event").isNotNull();
 				Configuration config = admin.getConfiguration(cl.getPid());
-				assertNotNull("Configuration from event", config);
+				assertThat(config).as("Configuration from event").isNotNull();
 				assertEqualProperties("Properties match", conf.getProperties(),
 						config.getProperties());
 			} finally {
-				getContext().ungetService(cl.getReference());
+				context.ungetService(cl.getReference());
 			}
 		} finally {
 			removeConfigurationListener(cl);
@@ -4150,6 +4061,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 *             if an error occurs or an assertion fails in the test.
 	 */
+	@Test
 	public void testUpdateConfigFactoryEvent() throws Exception {
 		ConfigurationListenerImpl cl = null;
 		String factorypid = Util
@@ -4160,31 +4072,27 @@ public class CMControl extends DefaultTestBundleControl {
 		String pid = conf.getPid();
 		Hashtable<String,Object> props = new Hashtable<>();
 		props.put("key", "value1");
-		trace("Create and register a new ConfigurationListener");
+		System.out.println("Create and register a new ConfigurationListener");
 		cl = createConfigurationListener(synchronizer);
 		conf.update(props);
-		trace("Wait until the ConfigurationListener has gotten"
+		System.out.println("Wait until the ConfigurationListener has gotten"
 				+ "the config factory update");
 		try {
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-			assertEquals("Config event pid match", pid, cl.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, cl.getType());
-			assertEquals("Config Factory event pid match", factorypid,
-					cl.getFactoryPid());
-			assertNotNull("Config Factory event reference null",
-					cl.getReference());
-			ConfigurationAdmin admin = getContext()
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+			assertThat(cl.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(cl.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
+			assertThat(cl.getFactoryPid()).as("Config Factory event pid match").isEqualTo(factorypid);
+			assertThat(cl.getReference()).as("Config Factory event reference null").isNotNull();
+			ConfigurationAdmin admin = context
 					.getService(cl.getReference());
 			try {
-				assertNotNull("Configuration Admin from event", admin);
+				assertThat(admin).as("Configuration Admin from event").isNotNull();
 				Configuration config = admin.getConfiguration(cl.getPid());
-				assertNotNull("Configuration from event", config);
+				assertThat(config).as("Configuration from event").isNotNull();
 				assertEqualProperties("Properties match", conf.getProperties(),
 						config.getProperties());
 			} finally {
-				getContext().ungetService(cl.getReference());
+				context.ungetService(cl.getReference());
 			}
 		} finally {
 			removeConfigurationListener(cl);
@@ -4210,6 +4118,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 *             if an error occurs or an assertion fails in the test.
 	 */
+	@Test
 	public void testDeleteConfigEvent() throws Exception {
 		ConfigurationListenerImpl cl = null;
 		String pid = Util
@@ -4219,35 +4128,31 @@ public class CMControl extends DefaultTestBundleControl {
 		Configuration conf = cm.getConfiguration(pid);
 		Hashtable<String,Object> props = new Hashtable<>();
 		props.put("key", "value1");
-		trace("Create and register a new ConfigurationListener");
+		System.out.println("Create and register a new ConfigurationListener");
 		try {
 			cl = createConfigurationListener(synchronizer, 2);
 			conf.update(props);
-			trace("Wait until the ConfigurationListener has gotten the update");
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+			System.out.println("Wait until the ConfigurationListener has gotten the update");
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 
 			conf.delete();
 
-			trace("Wait until the ConfigurationListener has gotten the delete");
+			System.out.println("Wait until the ConfigurationListener has gotten the delete");
 
-			assertTrue("Delete done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 2));
-			assertEquals("Config event pid match", pid, cl.getPid(2));
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_DELETED, cl.getType(2));
-			assertNull("Config Factory event pid null", cl.getFactoryPid(2));
-			assertNotNull("Config Factory event reference null",
-					cl.getReference(2));
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 2)).as("Delete done").isTrue();
+			assertThat(cl.getPid(2)).as("Config event pid match").isEqualTo(pid);
+			assertThat(cl.getType(2)).as("Config event type match").isEqualTo(ConfigurationEvent.CM_DELETED);
+			assertThat(cl.getFactoryPid(2)).as("Config Factory event pid null").isNull();
+			assertThat(cl.getReference(2)).as("Config Factory event reference null").isNotNull();
 			try {
-				ConfigurationAdmin admin = getContext()
+				ConfigurationAdmin admin = context
 						.getService(cl.getReference(2));
-				assertNotNull("Configuration Admin from event", admin);
+				assertThat(admin).as("Configuration Admin from event").isNotNull();
 				Configuration[] configs = admin
 						.listConfigurations("(service.pid=" + pid + ")");
-				assertNull("The configuration exists in CM!", configs);
+				assertThat(configs).as("The configuration exists in CM!").isNull();
 			} finally {
-				getContext().ungetService(cl.getReference(2));
+				context.ungetService(cl.getReference(2));
 			}
 		} finally {
 			removeConfigurationListener(cl);
@@ -4274,6 +4179,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 *             if an error occurs or an assertion fails in the test.
 	 */
+	@Test
 	public void testDeleteConfigFactoryEvent() throws Exception {
 		ConfigurationListenerImpl cl = null;
 		String factorypid = Util
@@ -4282,31 +4188,27 @@ public class CMControl extends DefaultTestBundleControl {
 		/* Set up the configuration */
 		Configuration conf = cm.createFactoryConfiguration(factorypid);
 		String pid = conf.getPid();
-		trace("Create and register a new ConfigurationListener");
+		System.out.println("Create and register a new ConfigurationListener");
 		cl = createConfigurationListener(synchronizer);
 		conf.delete();
-		trace("Wait until the ConfigurationListener has gotten"
+		System.out.println("Wait until the ConfigurationListener has gotten"
 				+ "the config factory delete");
 		try {
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-			assertEquals("Config event pid match", pid, cl.getPid());
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_DELETED, cl.getType());
-			assertEquals("Config Factory event pid match", factorypid,
-					cl.getFactoryPid());
-			assertNotNull("Config Factory event reference null",
-					cl.getReference());
-			ConfigurationAdmin admin = getContext()
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+			assertThat(cl.getPid()).as("Config event pid match").isEqualTo(pid);
+			assertThat(cl.getType()).as("Config event type match").isEqualTo(ConfigurationEvent.CM_DELETED);
+			assertThat(cl.getFactoryPid()).as("Config Factory event pid match").isEqualTo(factorypid);
+			assertThat(cl.getReference()).as("Config Factory event reference null").isNotNull();
+			ConfigurationAdmin admin = context
 					.getService(cl.getReference());
 			try {
-				assertNotNull("Configuration Admin from event", admin);
+				assertThat(admin).as("Configuration Admin from event").isNotNull();
 				Configuration[] configs = admin
 						.listConfigurations("(service.factoryPid=" + factorypid
 								+ ")");
-				assertNull("The configuration exists in CM!", configs);
+				assertThat(configs).as("The configuration exists in CM!").isNull();
 			} finally {
-				getContext().ungetService(cl.getReference());
+				context.ungetService(cl.getReference());
 			}
 		} finally {
 			removeConfigurationListener(cl);
@@ -4325,8 +4227,9 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 *             if an error occurs or an assertion fails in the test.
 	 */
+	@Test
 	public void testConfigListenerPermission() throws Exception {
-		Bundle tb = getContext().installBundle(getWebServer() + "tb1.jar");
+		Bundle tb = context.installBundle(getWebServer() + "tb1.jar");
 		String message = "registering config listener without permission";
 		try {
 			tb.start();
@@ -4364,51 +4267,40 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 *             if an error occurs or an assertion fails in the test.
 	 */
+	@Test
 	public void testConfigEventFromDifferentBundle() throws Exception {
-		trace("Create and register a new ConfigurationListener");
+		System.out.println("Create and register a new ConfigurationListener");
 		SynchronizerImpl synchronizer = new SynchronizerImpl();
 		ConfigurationListenerImpl cl = createConfigurationListener(
 				synchronizer, 4);
-		Bundle tb = getContext().installBundle(getWebServer() + "tb2.jar");
+		Bundle tb = context.installBundle(getWebServer() + "tb2.jar");
 		tb.start();
-		trace("Wait until the ConfigurationListener has gotten the update");
+		System.out.println("Wait until the ConfigurationListener has gotten the update");
 
 		try {
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-			assertEquals("Config event pid match", PACKAGE + ".tb2pid."
-					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX,
-					cl.getPid(1));
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, cl.getType(1));
-			assertNull("Config Factory event pid null", cl.getFactoryPid(1));
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+			assertThat(cl.getPid(1)).as("Config event pid match").isEqualTo(PACKAGE + ".tb2pid."
+					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX);
+			assertThat(cl.getType(1)).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
+			assertThat(cl.getFactoryPid(1)).as("Config Factory event pid null").isNull();
 
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 2));
-			assertEquals("Config event pid match", PACKAGE + ".tb2pid."
-					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX,
-					cl.getPid(2));
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_DELETED, cl.getType(2));
-			assertNull("Config Factory event pid null", cl.getFactoryPid(2));
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 2)).as("Update done").isTrue();
+			assertThat(cl.getPid(2)).as("Config event pid match").isEqualTo(PACKAGE + ".tb2pid."
+					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX);
+			assertThat(cl.getType(2)).as("Config event type match").isEqualTo(ConfigurationEvent.CM_DELETED);
+			assertThat(cl.getFactoryPid(2)).as("Config Factory event pid null").isNull();
 
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 3));
-			assertEquals("Config event facotory pid match", PACKAGE
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 3)).as("Update done").isTrue();
+			assertThat(cl.getFactoryPid(3)).as("Config event facotory pid match").isEqualTo(PACKAGE
 					+ ".tb2factorypid."
-					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX,
-					cl.getFactoryPid(3));
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_UPDATED, cl.getType(3));
+					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX);
+			assertThat(cl.getType(3)).as("Config event type match").isEqualTo(ConfigurationEvent.CM_UPDATED);
 
-			assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 4));
-			assertEquals("Config event factory pid match", PACKAGE
+			assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME, 4)).as("Update done").isTrue();
+			assertThat(cl.getFactoryPid(4)).as("Config event factory pid match").isEqualTo(PACKAGE
 					+ ".tb2factorypid."
-					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX,
-					cl.getFactoryPid(4));
-			assertEquals("Config event type match",
-					ConfigurationEvent.CM_DELETED, cl.getType(4));
+					+ ConfigurationListenerImpl.LISTENER_PID_SUFFIX);
+			assertThat(cl.getType(4)).as("Config event type match").isEqualTo(ConfigurationEvent.CM_DELETED);
 
 		} finally {
 			removeConfigurationListener(cl);
@@ -4455,18 +4347,17 @@ public class CMControl extends DefaultTestBundleControl {
 		props.put(Constants.SERVICE_PID, pid);
 		/* TODO: Testa registered service.pid with other String */
 		registerService(ManagedService.class.getName(), ms, props);
-		trace("ManagedService is registered with pid:" + pid);
+		System.out.println("ManagedService is registered with pid:" + pid);
 		return ms;
 	}
 
 	private void checkConfiguration(Configuration conf, String message,
 			String pid, String location) throws BundleException {
-		assertNotNull(message, conf);
-		assertEquals("Pid", pid, conf.getPid());
-		assertNull("FactoryPid", conf.getFactoryPid());
-		assertNull("Properties", conf.getProperties());
-		assertEquals("Location", location,
-				this.getBundleLocationForCompare(conf));
+		assertThat(conf).as(message).isNotNull();
+		assertThat(conf.getPid()).as("Pid").isEqualTo(pid);
+		assertThat(conf.getFactoryPid()).as("FactoryPid").isNull();
+		assertThat(conf.getProperties()).as("Properties").isNull();
+		assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(location);
 
 	}
 
@@ -4508,7 +4399,7 @@ public class CMControl extends DefaultTestBundleControl {
 	public final static String PACKAGE = "org.osgi.test.cases.cm.tbc";
 
 	private String getLocation() {
-		return getContext().getBundle().getLocation();
+		return context.getBundle().getLocation();
 	}
 
 	/**
@@ -4518,21 +4409,21 @@ public class CMControl extends DefaultTestBundleControl {
         if (cm != null) {
             Configuration[] configs = cm.listConfigurations(null);
             if (configs != null) {
-                // log("  cleanCM() -- Checking " + configs.length + " configs");
+                // System.out.println("  cleanCM() -- Checking " + configs.length + " configs");
                 for (int i = 0; i < configs.length; i++) {
                     Configuration config = configs[i];
                     if (!existingConfigs.contains(config.getPid())) {
-                        // log("               Delete " + config.getPid());
+                        // System.out.println("               Delete " + config.getPid());
                         config.delete();
                     } else {
-                        // log("               Keep   " + config.getPid());
+                        // System.out.println("               Keep   " + config.getPid());
                     }
                 }
             } else {
-                // log("  cleanCM() -- No Configurations to clear");
+                // System.out.println("  cleanCM() -- No Configurations to clear");
             }
         } else {
-            // log("  cleanCM() -- No CM !");
+            // System.out.println("  cleanCM() -- No CM !");
         }
 	}
 
@@ -4559,36 +4450,43 @@ public class CMControl extends DefaultTestBundleControl {
 	private final String regionA = "?RegionA";
 	private String regionB = "?RegionB";
 
+	@Test
 	public void testGetConfigurationWithLocation_2_01() throws Exception {
 		final String locationOld = null;
 		this.internalGetConfigurationWithLocation_2_02To08(1, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_02() throws Exception {
 		final String locationOld = locationA;
 		this.internalGetConfigurationWithLocation_2_02To08(2, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_03() throws Exception {
 		final String locationOld = locationA + "*";
 		this.internalGetConfigurationWithLocation_2_02To08(3, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_04() throws Exception {
 		final String locationOld = locationB;
 		this.internalGetConfigurationWithLocation_2_02To08(4, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_06() throws Exception {
 		final String locationOld = "?*";
 		this.internalGetConfigurationWithLocation_2_02To08(6, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_07() throws Exception {
 		final String locationOld = regionA;
 		this.internalGetConfigurationWithLocation_2_02To08(7, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_08() throws Exception {
 		final String locationOld = regionB;
 		this.internalGetConfigurationWithLocation_2_02To08(8, locationOld);
@@ -4609,45 +4507,40 @@ public class CMControl extends DefaultTestBundleControl {
 
 		// Get a brand new configuration
 		conf = cm.getConfiguration(pid1, locationOld);
-		assertEquals("Location", locationOld,
-				this.getBundleLocationForCompare(conf));
-		assertNull("Configuration props MUST be null", conf.getProperties());
+		assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+		assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 
 		// micro 2
 		testId = traceTestId(header, ++micro);
 		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
 		conf = cm.getConfiguration(pid1, locationOld);
-		assertEquals("Location", locationOld,
-				this.getBundleLocationForCompare(conf));
-		assertNull("Configuration props MUST be null", conf.getProperties());
+		assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+		assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 
 		// micro 1
 		testId = traceTestId(header, ++micro);
 		props.put("StringKey", "stringvalue");
 		conf.update(props);
 		conf = cm.getConfiguration(pid1, locationOld);
-		assertEquals("Location", locationOld,
-				this.getBundleLocationForCompare(conf));
-		assertEquals("Check Configuration props", 2, conf.getProperties()
-				.size());
-		assertEquals("Check Configuration props", "stringvalue", conf
-				.getProperties().get("StringKey"));
+		assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+		assertThat(conf.getProperties()
+				.size()).as("Check Configuration props").isEqualTo(2);
+		assertThat(conf
+				.getProperties().get("StringKey")).as("Check Configuration props").isEqualTo("stringvalue");
 		conf.delete();
 
 		resetPermissions();
 		conf = cm.getConfiguration(pid1, locationOld);
-		assertEquals("Location", locationOld,
-				this.getBundleLocationForCompare(conf));
-		assertNull("Configuration props MUST be null", conf.getProperties());
+		assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+		assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 
 		// micro 4
 		testId = traceTestId(header, ++micro);
 		setCPtoBundle(locationA, ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 2) {
 			conf = cm.getConfiguration(pid1, locationOld);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1,
 					locationOld);
@@ -4658,12 +4551,11 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 2) {
 			conf = cm.getConfiguration(pid1, locationOld);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
-			assertEquals("Check Configuration props", "stringvalue", conf
-					.getProperties().get("StringKey"));
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
+			assertThat(conf
+					.getProperties().get("StringKey")).as("Check Configuration props").isEqualTo("stringvalue");
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1,
 					locationOld);
@@ -4678,9 +4570,8 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle("?*", ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 6 || minor == 7 || minor == 8) {
 			conf = cm.getConfiguration(pid1, locationOld);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1,
 					locationOld);
@@ -4691,12 +4582,11 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 6 || minor == 7 || minor == 8) {
 			conf = cm.getConfiguration(pid1, locationOld);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
-			assertEquals("Check Configuration props", "stringvalue", conf
-					.getProperties().get("StringKey"));
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
+			assertThat(conf
+					.getProperties().get("StringKey")).as("Check Configuration props").isEqualTo("stringvalue");
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1,
 					locationOld);
@@ -4711,9 +4601,8 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle(regionA, ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 7) {
 			conf = cm.getConfiguration(pid1, locationOld);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1,
 					locationOld);
@@ -4724,12 +4613,11 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 7) {
 			conf = cm.getConfiguration(pid1, locationOld);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
-			assertEquals("Check Configuration props", "stringvalue", conf
-					.getProperties().get("StringKey"));
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
+			assertThat(conf
+					.getProperties().get("StringKey")).as("Check Configuration props").isEqualTo("stringvalue");
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1,
 					locationOld);
@@ -4762,12 +4650,11 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 7) {
 			conf = cm.getConfiguration(pid1, "?");
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
-			assertEquals("Check Configuration props", "stringvalue", conf
-					.getProperties().get("StringKey"));
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
+			assertThat(conf
+					.getProperties().get("StringKey")).as("Check Configuration props").isEqualTo("stringvalue");
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1, "?");
 		}
@@ -4781,40 +4668,42 @@ public class CMControl extends DefaultTestBundleControl {
 			testId = traceTestId(header, ++micro);
 			setCPtoBundle(null, null, thisBundle);
 			conf = cm.getConfiguration(pid1, thisLocation);
-			assertEquals("Location", thisLocation,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisLocation);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 
 			// micro 15
 			testId = traceTestId(header, ++micro);
 			conf.update(props);
 			conf = cm.getConfiguration(pid1, thisLocation);
-			assertEquals("Location", thisLocation,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
-			assertEquals("Check Configuration props", "stringvalue", conf
-					.getProperties().get("StringKey"));
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisLocation);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
+			assertThat(conf
+					.getProperties().get("StringKey")).as("Check Configuration props").isEqualTo("stringvalue");
 			conf.delete();
 		}
 	}
 
 	// TODO confirm
+	@Test
 	public void testGetConfigurationWithLocation_2_09() throws Exception {
 		final String locationOld = null;
 		this.internalGetConfigurationWithLocation_2_09To13(9, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_10() throws Exception {
 		final String locationOld = locationA;
 		this.internalGetConfigurationWithLocation_2_09To13(10, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_12() throws Exception {
 		final String locationOld = regionA;
 		this.internalGetConfigurationWithLocation_2_09To13(12, locationOld);
 	}
 
+	@Test
 	public void testGetConfigurationWithLocation_2_13() throws Exception {
 		final String locationOld = regionA + "*";
 		this.internalGetConfigurationWithLocation_2_09To13(13, locationOld);
@@ -4835,9 +4724,8 @@ public class CMControl extends DefaultTestBundleControl {
 		testId = traceTestId(header, ++micro);
 		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
 		conf = cm.getConfiguration(pid1, location);
-		assertEquals("Location", location,
-				this.getBundleLocationForCompare(conf));
-		assertNull("Configuration props MUST be null", conf.getProperties());
+		assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(location);
+		assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		conf.delete();
 
 		// 2
@@ -4845,9 +4733,8 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle(locationA, ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 10) {
 			conf = cm.getConfiguration(pid1, location);
-			assertEquals("Location", location,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(location);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 			conf.delete();
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1, location);
@@ -4868,9 +4755,8 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle("?*", ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 12 || minor == 13) {
 			conf = cm.getConfiguration(pid1, location);
-			assertEquals("Location", location,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(location);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 			conf.delete();
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1, location);
@@ -4881,9 +4767,8 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle(regionA, ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 12) {
 			conf = cm.getConfiguration(pid1, location);
-			assertEquals("Location", location,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(location);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 			conf.delete();
 		} else {
 			assertThrowsSEbyGetConfigurationWithLocation(testId, pid1, location);
@@ -4899,9 +4784,8 @@ public class CMControl extends DefaultTestBundleControl {
 			testId = traceTestId(header, ++micro);
 			setCPtoBundle(null, null, thisBundle);
 			conf = cm.getConfiguration(pid1, thisLocation);
-			assertEquals("Location", thisLocation,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisLocation);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 			conf.delete();
 
 			// thisLocation with CONFIGURE
@@ -4909,18 +4793,16 @@ public class CMControl extends DefaultTestBundleControl {
 			setCPtoBundle(regionA, ConfigurationPermission.CONFIGURE,
 					thisBundle);
 			conf = cm.getConfiguration(pid1, thisLocation);
-			assertEquals("Location", thisLocation,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisLocation);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 			conf.delete();
 
 			// thisLocation with TARGET
 			testId = traceTestId(header, ++micro);
 			setCPtoBundle("*", ConfigurationPermission.TARGET, thisBundle);
 			conf = cm.getConfiguration(pid1, thisLocation);
-			assertEquals("Location", thisLocation,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisLocation);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 			conf.delete();
 		}
 	}
@@ -4957,7 +4839,7 @@ public class CMControl extends DefaultTestBundleControl {
 
 	private String traceTestId(final String header, int micro) {
 		String testId = header + String.valueOf(micro);
-		trace(testId);
+		System.out.println(testId);
 		return testId;
 	}
 
@@ -4969,7 +4851,7 @@ public class CMControl extends DefaultTestBundleControl {
 			cm.getConfiguration(pid, location);
 			// A SecurityException should have been thrown
 			failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			// Check that we got the correct exception
@@ -4978,31 +4860,37 @@ public class CMControl extends DefaultTestBundleControl {
 
 	}
 
+	@Test
 	public void testGetConfiguration_3_01() throws Exception {
 		final String locationOld = null;
 		this.internalGetConfiguration_3_01To07(1, locationOld);
 	}
 
+	@Test
 	public void testGetConfiguration_3_02() throws Exception {
 		final String locationOld = locationA;
 		this.internalGetConfiguration_3_01To07(2, locationOld);
 	}
 
+	@Test
 	public void testGetConfiguration_3_03() throws Exception {
 		final String locationOld = locationA + "*";
 		this.internalGetConfiguration_3_01To07(3, locationOld);
 	}
 
+	@Test
 	public void testGetConfiguration_3_04() throws Exception {
 		final String locationOld = locationB;
 		this.internalGetConfiguration_3_01To07(4, locationOld);
 	}
 
+	@Test
 	public void testGetConfiguration_3_06() throws Exception {
 		final String locationOld = regionA;
 		this.internalGetConfiguration_3_01To07(6, locationOld);
 	}
 
+	@Test
 	public void testGetConfiguration_3_07() throws Exception {
 		final String locationOld = regionA + "*";
 		this.internalGetConfiguration_3_01To07(7, locationOld);
@@ -5029,13 +4917,11 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
 		conf = cm.getConfiguration(pid1);
 		if (minor == 1) {
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		}
 
 		// 1
@@ -5044,15 +4930,13 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		conf = cm.getConfiguration(pid1);
 		if (minor == 1) {
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else {
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		}
 		conf.delete();
 
@@ -5064,14 +4948,12 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle(locationA, ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else if (minor == 2) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5081,16 +4963,14 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else if (minor == 2) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5104,14 +4984,12 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle("?*", ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else if (minor == 6 || minor == 7) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5121,16 +4999,14 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else if (minor == 6 || minor == 7) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5144,14 +5020,12 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle(regionA, ConfigurationPermission.CONFIGURE, thisBundle);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else if (minor == 6) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5161,16 +5035,14 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else if (minor == 6) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", locationOld,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(locationOld);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5184,9 +5056,8 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle("*", ConfigurationPermission.TARGET, thisBundle);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5196,10 +5067,9 @@ public class CMControl extends DefaultTestBundleControl {
 		conf.update(props);
 		if (minor == 1) {
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 		} else {
 			assertThrowsSEbyGetConfiguration(pid1, message);
 		}
@@ -5213,18 +5083,16 @@ public class CMControl extends DefaultTestBundleControl {
 			testId = traceTestId(header, ++micro);
 			setCPtoBundle(null, null, thisBundle);
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 
 			// 14
 			testId = traceTestId(header, ++micro);
 			conf.update(props);
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisBundle.getLocation(),
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisBundle.getLocation());
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 			conf.delete();
 		}
 
@@ -5236,29 +5104,27 @@ public class CMControl extends DefaultTestBundleControl {
 			testId = traceTestId(header, ++micro);
 			setCPtoBundle(null, null, thisBundle);
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisLocation,
-					this.getBundleLocationForCompare(conf));
-			assertNull("Configuration props MUST be null", conf.getProperties());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisLocation);
+			assertThat(conf.getProperties()).as("Configuration props MUST be null").isNull();
 
 			// 14
 			testId = traceTestId(header, ++micro);
 			conf.update(props);
 			conf = cm.getConfiguration(pid1);
-			assertEquals("Location", thisLocation,
-					this.getBundleLocationForCompare(conf));
-			assertEquals("Check Configuration props", 2, conf.getProperties()
-					.size());
+			assertThat(this.getBundleLocationForCompare(conf)).as("Location").isEqualTo(thisLocation);
+			assertThat(conf.getProperties()
+					.size()).as("Check Configuration props").isEqualTo(2);
 			conf.delete();
 		}
 	}
 
 	private void assertThrowsSEbyGetConfiguration(final String pid,
-			String message) throws AssertionFailedError {
+			String message) throws AssertionError {
 		try {
 			cm.getConfiguration(pid);
 			// A SecurityException should have been thrown
 			failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			// Check that we got the correct exception
@@ -5267,36 +5133,42 @@ public class CMControl extends DefaultTestBundleControl {
 	}
 
 	// TODO confirm
+	@Test
 	public void testCreateFactoryConfiguration_4_01() throws Exception {
 		String location = null;
 		this.internalCreateFactoryConfigurationWithLocation_4_01To07(1,
 				location);
 	}
 
+	@Test
 	public void testCreateFactoryConfiguration_4_02() throws Exception {
 		String location = locationA;
 		this.internalCreateFactoryConfigurationWithLocation_4_01To07(2,
 				location);
 	}
 
+	@Test
 	public void testCreateFactoryConfiguration_4_03() throws Exception {
 		String location = locationA + "*";
 		this.internalCreateFactoryConfigurationWithLocation_4_01To07(3,
 				location);
 	}
 
+	@Test
 	public void testCreateFactoryConfiguration_4_04() throws Exception {
 		String location = locationB;
 		this.internalCreateFactoryConfigurationWithLocation_4_01To07(4,
 				location);
 	}
 
+	@Test
 	public void testCreateFactoryConfiguration_4_06() throws Exception {
 		String location = regionA;
 		this.internalCreateFactoryConfigurationWithLocation_4_01To07(6,
 				location);
 	}
 
+	@Test
 	public void testCreateFactoryConfiguration_4_07() throws Exception {
 		String location = regionA + "*";
 		this.internalCreateFactoryConfigurationWithLocation_4_01To07(7,
@@ -5321,14 +5193,10 @@ public class CMControl extends DefaultTestBundleControl {
 		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
 		Configuration conf1 = cm.createFactoryConfiguration(fpid, location);
 		Configuration conf2 = cm.createFactoryConfiguration(fpid, location);
-		assertEquals("Check conf fpid.", conf1.getFactoryPid(),
-				conf2.getFactoryPid());
-		assertFalse("Check conf pid does not same.",
-				conf1.getPid().equals(conf2.getPid()));
-		assertEquals("Check conf location.", location,
-				this.getBundleLocationForCompare(conf1));
-		assertEquals("Check conf location.", location,
-				this.getBundleLocationForCompare(conf2));
+		assertThat(conf2.getFactoryPid()).as("Check conf fpid.").isEqualTo(conf1.getFactoryPid());
+		assertThat(conf1.getPid().equals(conf2.getPid())).as("Check conf pid does not same.").isFalse();
+		assertThat(this.getBundleLocationForCompare(conf1)).as("Check conf location.").isEqualTo(location);
+		assertThat(this.getBundleLocationForCompare(conf2)).as("Check conf location.").isEqualTo(location);
 
 		// 2
 		testId = traceTestId(header, ++micro);
@@ -5336,14 +5204,10 @@ public class CMControl extends DefaultTestBundleControl {
 		if (minor == 2) {
 			conf1 = cm.createFactoryConfiguration(fpid, location);
 			conf2 = cm.createFactoryConfiguration(fpid, location);
-			assertEquals("Check conf fpid.", conf1.getFactoryPid(),
-					conf2.getFactoryPid());
-			assertFalse("Check conf pid does not same.",
-					conf1.getPid().equals(conf2.getPid()));
-			assertEquals("Check conf location.", location,
-					this.getBundleLocationForCompare(conf1));
-			assertEquals("Check conf location.", location,
-					this.getBundleLocationForCompare(conf2));
+			assertThat(conf2.getFactoryPid()).as("Check conf fpid.").isEqualTo(conf1.getFactoryPid());
+			assertThat(conf1.getPid().equals(conf2.getPid())).as("Check conf pid does not same.").isFalse();
+			assertThat(this.getBundleLocationForCompare(conf1)).as("Check conf location.").isEqualTo(location);
+			assertThat(this.getBundleLocationForCompare(conf2)).as("Check conf location.").isEqualTo(location);
 		} else {
 			this.assertThrowsSEbyCreateFactoryConf(fpid, location, message);
 		}
@@ -5354,14 +5218,10 @@ public class CMControl extends DefaultTestBundleControl {
 		if (minor == 6 || minor == 7) {
 			conf1 = cm.createFactoryConfiguration(fpid, location);
 			conf2 = cm.createFactoryConfiguration(fpid, location);
-			assertEquals("Check conf fpid.", conf1.getFactoryPid(),
-					conf2.getFactoryPid());
-			assertFalse("Check conf pid does not same.",
-					conf1.getPid().equals(conf2.getPid()));
-			assertEquals("Check conf location.", location,
-					this.getBundleLocationForCompare(conf1));
-			assertEquals("Check conf location.", location,
-					this.getBundleLocationForCompare(conf2));
+			assertThat(conf2.getFactoryPid()).as("Check conf fpid.").isEqualTo(conf1.getFactoryPid());
+			assertThat(conf1.getPid().equals(conf2.getPid())).as("Check conf pid does not same.").isFalse();
+			assertThat(this.getBundleLocationForCompare(conf1)).as("Check conf location.").isEqualTo(location);
+			assertThat(this.getBundleLocationForCompare(conf2)).as("Check conf location.").isEqualTo(location);
 		} else {
 			this.assertThrowsSEbyCreateFactoryConf(fpid, location, message);
 		}
@@ -5372,14 +5232,10 @@ public class CMControl extends DefaultTestBundleControl {
 		if (minor == 6) {
 			conf1 = cm.createFactoryConfiguration(fpid, location);
 			conf2 = cm.createFactoryConfiguration(fpid, location);
-			assertEquals("Check conf fpid.", conf1.getFactoryPid(),
-					conf2.getFactoryPid());
-			assertFalse("Check conf pid does not same.",
-					conf1.getPid().equals(conf2.getPid()));
-			assertEquals("Check conf location.", location,
-					this.getBundleLocationForCompare(conf1));
-			assertEquals("Check conf location.", location,
-					this.getBundleLocationForCompare(conf2));
+			assertThat(conf2.getFactoryPid()).as("Check conf fpid.").isEqualTo(conf1.getFactoryPid());
+			assertThat(conf1.getPid().equals(conf2.getPid())).as("Check conf pid does not same.").isFalse();
+			assertThat(this.getBundleLocationForCompare(conf1)).as("Check conf location.").isEqualTo(location);
+			assertThat(this.getBundleLocationForCompare(conf2)).as("Check conf location.").isEqualTo(location);
 		} else {
 			this.assertThrowsSEbyCreateFactoryConf(fpid, location, message);
 		}
@@ -5404,24 +5260,20 @@ public class CMControl extends DefaultTestBundleControl {
 			setCPtoBundle(null, null, thisBundle);
 			conf1 = cm.createFactoryConfiguration(fpid, thisLocation);
 			conf2 = cm.createFactoryConfiguration(fpid, thisLocation);
-			assertEquals("Check conf fpid.", conf1.getFactoryPid(),
-					conf2.getFactoryPid());
-			assertFalse("Check conf pid does not same.",
-					conf1.getPid().equals(conf2.getPid()));
-			assertEquals("Check conf location.", thisLocation,
-					this.getBundleLocationForCompare(conf1));
-			assertEquals("Check conf location.", thisLocation,
-					this.getBundleLocationForCompare(conf2));
+			assertThat(conf2.getFactoryPid()).as("Check conf fpid.").isEqualTo(conf1.getFactoryPid());
+			assertThat(conf1.getPid().equals(conf2.getPid())).as("Check conf pid does not same.").isFalse();
+			assertThat(this.getBundleLocationForCompare(conf1)).as("Check conf location.").isEqualTo(thisLocation);
+			assertThat(this.getBundleLocationForCompare(conf2)).as("Check conf location.").isEqualTo(thisLocation);
 		}
 	}
 
 	private void assertThrowsSEbyCreateFactoryConf(final String fPid,
-			final String location, String message) throws AssertionFailedError {
+			final String location, String message) throws AssertionError {
 		try {
 			cm.createFactoryConfiguration(fPid, location);
 			// A SecurityException should have been thrown
 			failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			// Check that we got the correct exception
@@ -5429,26 +5281,31 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testListConfigurations_6_01() throws Exception {
 		String filter = null;
 		this.internalListConfigurations(1, filter);
 	}
 
+	@Test
 	public void testListConfigurations_6_02() throws Exception {
 		String filter = "(service.pid=pid1)";
 		this.internalListConfigurations(2, filter);
 	}
 
+	@Test
 	public void testListConfigurations_6_03() throws Exception {
 		String filter = "(service.bundleLocation=location.a)";
 		this.internalListConfigurations(3, filter);
 	}
 
+	@Test
 	public void testListConfigurations_6_04() throws Exception {
 		String filter = "(service.bundleLocation=?RegionA)";
 		this.internalListConfigurations(4, filter);
 	}
 
+	@Test
 	public void testListConfigurations_6_05() throws Exception {
 		String filter = "(&(service.bundleLocation=?RegionA)(service.pid=pid2))";
 		this.internalListConfigurations(5, filter);
@@ -5485,10 +5342,10 @@ public class CMControl extends DefaultTestBundleControl {
 				thisBundle);
 		Configuration[] conflist = cm.listConfigurations(filter);
 		if (minor == 4 || minor == 5) {
-			assertNull("Returned list of configuration MUST be null.", conflist);
+			assertThat(conflist).as("Returned list of configuration MUST be null.").isNull();
 		} else {
-			assertEquals("number of Configuration Object", 1, conflist.length);
-			assertEquals(message, conflist[0], conf1);
+			assertThat(conflist.length).as("number of Configuration Object").isOne();
+			assertThat(conf1).as(message).isEqualTo(conflist[0]);
 		}
 
 		testId = traceTestId(header, ++micro);
@@ -5496,44 +5353,51 @@ public class CMControl extends DefaultTestBundleControl {
 				thisBundle);
 		conflist = cm.listConfigurations(filter);
 		if (minor == 1 || minor == 4 || minor == 5) {
-			assertEquals("number of Configuration Object", 1, conflist.length);
-			assertEquals(message, conflist[0], conf2);
+			assertThat(conflist.length).as("number of Configuration Object").isOne();
+			assertThat(conf2).as(message).isEqualTo(conflist[0]);
 		} else {
-			assertNull("Returned list of configuration MUST be null.", conflist);
+			assertThat(conflist).as("Returned list of configuration MUST be null.").isNull();
 		}
 	}
 
 	// TODO
+	@Test
 	public void testGetBundleLocation_7_01() throws Exception {
 		String locationOld = null;
 		this.internalGetBundleLocation_7_01to08(1, locationOld);
 	}
 
+	@Test
 	public void testGetBundleLocation_7_02() throws Exception {
 		String locationOld = locationA;
 		this.internalGetBundleLocation_7_01to08(2, locationOld);
 	}
 
+	@Test
 	public void testGetBundleLocation_7_03() throws Exception {
 		String locationOld = locationA + "*";
 		this.internalGetBundleLocation_7_01to08(3, locationOld);
 	}
 
+	@Test
 	public void testGetBundleLocation_7_05() throws Exception {
 		String locationOld = "?*";
 		this.internalGetBundleLocation_7_01to08(5, locationOld);
 	}
 
+	@Test
 	public void testGetBundleLocation_7_06() throws Exception {
 		String locationOld = regionA;
 		this.internalGetBundleLocation_7_01to08(6, locationOld);
 	}
 
+	@Test
 	public void testGetBundleLocation_7_07() throws Exception {
 		String locationOld = regionA + "*";
 		this.internalGetBundleLocation_7_01to08(7, locationOld);
 	}
 
+	@Test
 	public void testGetBundleLocation_7_08() throws Exception {
 		String locationOld = thisLocation;
 		this.internalGetBundleLocation_7_01to08(8, locationOld);
@@ -5559,7 +5423,7 @@ public class CMControl extends DefaultTestBundleControl {
 			testId = traceTestId(header, ++micro);
 			setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
 			String loc = conf.getBundleLocation();
-			assertEquals("Check conf location", locationOld, loc);
+			assertThat(loc).as("Check conf location").isEqualTo(locationOld);
 
 			// 2
 			testId = traceTestId(header, ++micro);
@@ -5567,7 +5431,7 @@ public class CMControl extends DefaultTestBundleControl {
 					thisBundle);
             if (minor == 2) {
 				loc = conf.getBundleLocation();
-				assertEquals("Check conf location", locationOld, loc);
+				assertThat(loc).as("Check conf location").isEqualTo(locationOld);
 			} else {
 				this.assertThrowsSEbyGetLocation(conf, testId);
 			}
@@ -5582,7 +5446,7 @@ public class CMControl extends DefaultTestBundleControl {
 			setCPtoBundle("?*", ConfigurationPermission.CONFIGURE, thisBundle);
             if (minor == 5 || minor == 6 || minor == 7) {
 				loc = conf.getBundleLocation();
-				assertEquals("Check conf location", locationOld, loc);
+				assertThat(loc).as("Check conf location").isEqualTo(locationOld);
 			} else {
 				this.assertThrowsSEbyGetLocation(conf, testId);
 			}
@@ -5593,7 +5457,7 @@ public class CMControl extends DefaultTestBundleControl {
 					thisBundle);
             if (minor == 6) {
 				loc = conf.getBundleLocation();
-				assertEquals("Check conf location", locationOld, loc);
+				assertThat(loc).as("Check conf location").isEqualTo(locationOld);
 			} else {
 				this.assertThrowsSEbyGetLocation(conf, testId);
 			}
@@ -5608,7 +5472,7 @@ public class CMControl extends DefaultTestBundleControl {
 			setCPtoBundle("*", ConfigurationPermission.CONFIGURE + ","
 					+ ConfigurationPermission.TARGET, thisBundle);
 			loc = conf.getBundleLocation();
-			assertEquals("Check conf location", locationOld, loc);
+			assertThat(loc).as("Check conf location").isEqualTo(locationOld);
 
 			// 8
 			if (minor == 6 || minor == 7) {
@@ -5625,7 +5489,7 @@ public class CMControl extends DefaultTestBundleControl {
 				setCPtoBundle(regionA, ConfigurationPermission.CONFIGURE + ","
 						+ ConfigurationPermission.TARGET, thisBundle);
 				loc = conf.getBundleLocation();
-				assertEquals("Check conf location", locationOld, loc);
+				assertThat(loc).as("Check conf location").isEqualTo(locationOld);
 			}
 			++micro;
 
@@ -5637,7 +5501,7 @@ public class CMControl extends DefaultTestBundleControl {
             // Bug2539: need to have CONFIGURE(thisLocation)
             setCPtoBundle(thisLocation, ConfigurationPermission.CONFIGURE, thisBundle);
             loc = conf.getBundleLocation();
-			assertEquals("Check conf location", thisLocation, loc);
+			assertThat(loc).as("Check conf location").isEqualTo(thisLocation);
 		} finally {
 			this.resetPermissions();
 			if (conf != null)
@@ -5646,14 +5510,14 @@ public class CMControl extends DefaultTestBundleControl {
 	}
 
 	private void assertThrowsSEbyGetLocation(final Configuration conf,
-			String testId) throws AssertionFailedError {
+			String testId) throws AssertionError {
 		String message = testId
 				+ ":try to get bundle location without appropriate ConfigurationPermission.";
 		try {
 			conf.getBundleLocation();
 			// A SecurityException should have been thrown
 			failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			// Check that we got the correct exception
@@ -5661,36 +5525,42 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testSetBundleLocation_8_01() throws Exception {
 		String locationOld = null;
 		String location = null;
 		this.internalSetBundleLocation_8_01to07(1, locationOld, location);
 	}
 
+	@Test
 	public void testSetBundleLocation_8_02() throws Exception {
 		String locationOld = null;
 		String location = locationA;
 		this.internalSetBundleLocation_8_01to07(2, locationOld, location);
 	}
 
+	@Test
 	public void testSetBundleLocation_8_04() throws Exception {
 		String locationOld = null;
 		String location = "?*";
 		this.internalSetBundleLocation_8_01to07(4, locationOld, location);
 	}
 
+	@Test
 	public void testSetBundleLocation_8_05() throws Exception {
 		String locationOld = null;
 		String location = regionA;
 		this.internalSetBundleLocation_8_01to07(5, locationOld, location);
 	}
 
+	@Test
 	public void testSetBundleLocation_8_06() throws Exception {
 		String locationOld = locationA;
 		String location = null;
 		this.internalSetBundleLocation_8_01to07(6, locationOld, location);
 	}
 
+	@Test
 	public void testSetBundleLocation_8_07() throws Exception {
 		String locationOld = locationA;
 		String location = locationA;
@@ -5711,15 +5581,13 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
     		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		this.setAppropriatePermission();
     		conf.setBundleLocation(locationOld);
@@ -5731,8 +5599,7 @@ public class CMControl extends DefaultTestBundleControl {
     					thisBundle);
     			if (minor == 7) {
     				conf.setBundleLocation(location);
-    				assertEquals("Check Conf location.", location,
-    						this.getBundleLocationForCompare(conf));
+    				assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
     			} else
     				assertThrowsSEbySetLocation(conf, location, testId);
     		} else {
@@ -5754,6 +5621,7 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testSetBundleLocation_8_08() throws Exception {
 
 		int minor = 8;
@@ -5769,8 +5637,7 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
@@ -5779,15 +5646,13 @@ public class CMControl extends DefaultTestBundleControl {
     		cList.add(locationB);
     		setCPListtoBundle(cList, null, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		// 2
     		testId = traceTestId(header, ++micro);
     		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
     		conf.setBundleLocation(locationOld);
@@ -5819,6 +5684,7 @@ public class CMControl extends DefaultTestBundleControl {
         }
 	}
 
+	@Test
 	public void testSetBundleLocation_8_10() throws Exception {
 
 		int minor = 10;
@@ -5834,8 +5700,7 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
@@ -5844,8 +5709,7 @@ public class CMControl extends DefaultTestBundleControl {
     		cList.add(regionA);
     		setCPListtoBundle(cList, null, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		this.setAppropriatePermission();
     		conf.setBundleLocation(locationOld);
@@ -5877,6 +5741,7 @@ public class CMControl extends DefaultTestBundleControl {
         }
 	}
 
+	@Test
 	public void testSetBundleLocation_8_15() throws Exception {
 
 		int minor = 15;
@@ -5892,15 +5757,13 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
     		setCPtoBundle("*", ConfigurationPermission.CONFIGURE, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		// 2
     		testId = traceTestId(header, ++micro);
@@ -5918,6 +5781,7 @@ public class CMControl extends DefaultTestBundleControl {
         }
 	}
 
+	@Test
 	public void testSetBundleLocation_8_16() throws Exception {
 
 		int minor = 16;
@@ -5933,8 +5797,7 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
@@ -5943,8 +5806,7 @@ public class CMControl extends DefaultTestBundleControl {
     		cList.add(regionA);
     		setCPListtoBundle(cList, null, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		this.setAppropriatePermission();
     		conf.setBundleLocation(locationOld);
@@ -5976,6 +5838,7 @@ public class CMControl extends DefaultTestBundleControl {
         }
 	}
 
+	@Test
 	public void testSetBundleLocation_8_17() throws Exception {
 
 		int minor = 17;
@@ -5991,8 +5854,7 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
@@ -6001,8 +5863,7 @@ public class CMControl extends DefaultTestBundleControl {
     		cList.add(regionA);
     		setCPListtoBundle(cList, null, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		this.setAppropriatePermission();
     		conf.setBundleLocation(locationOld);
@@ -6034,6 +5895,7 @@ public class CMControl extends DefaultTestBundleControl {
         }
 	}
 
+	@Test
 	public void testSetBundleLocation_8_18() throws Exception {
 
 		int minor = 18;
@@ -6049,15 +5911,13 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
     		setCPtoBundle(regionA, ConfigurationPermission.CONFIGURE, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		// 2
     		testId = traceTestId(header, ++micro);
@@ -6075,6 +5935,7 @@ public class CMControl extends DefaultTestBundleControl {
         }
 	}
 
+	@Test
 	public void testSetBundleLocation_8_19() throws Exception {
 
 		int minor = 19;
@@ -6090,8 +5951,7 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
     		this.setAppropriatePermission();
     		conf = cm.getConfiguration(pid1, locationOld);
-            assertEquals("Check Conf location.", locationOld,
-                this.getBundleLocationForCompare(conf));
+            assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(locationOld);
 
     		// 1
     		testId = traceTestId(header, ++micro);
@@ -6100,8 +5960,7 @@ public class CMControl extends DefaultTestBundleControl {
     		cList.add(regionA + "*");
     		setCPListtoBundle(cList, null, thisBundle);
     		conf.setBundleLocation(location);
-    		assertEquals("Check Conf location.", location,
-    				this.getBundleLocationForCompare(conf));
+    		assertThat(this.getBundleLocationForCompare(conf)).as("Check Conf location.").isEqualTo(location);
 
     		// 2
     		testId = traceTestId(header, ++micro);
@@ -6154,14 +6013,14 @@ public class CMControl extends DefaultTestBundleControl {
 	}
 
 	private void assertThrowsSEbySetLocation(final Configuration conf,
-			final String location, String testId) throws AssertionFailedError {
+			final String location, String testId) throws AssertionError {
 		String message = testId
 				+ ":try to set bundle location without appropriate ConfigurationPermission.";
 		try {
 			conf.setBundleLocation(location);
 			// A SecurityException should have been thrown
 			failException(message, SecurityException.class);
-		} catch (AssertionFailedError e) {
+		} catch (AssertionError e) {
 			throw e;
 		} catch (Throwable e) {
 			// Check that we got the correct exception
@@ -6173,33 +6032,26 @@ public class CMControl extends DefaultTestBundleControl {
 
 	private int assertCallback(SynchronizerImpl sync, int count) {
 		boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count);
-		assertTrue(
-				"ManagedService#updated(props)/ManagedServiceFactory#updated(pid,props) must be called back",
-				calledback);
+		assertThat(calledback).as("ManagedService#updated(props)/ManagedServiceFactory#updated(pid,props) must be called back").isTrue();
 		return count;
 	}
 
 	private void assertNoCallback(SynchronizerImpl sync, int count) {
 		boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1);
-		assertFalse(
-				"ManagedService#updated(props)/ManagedServiceFactory#updated(pid,props) must NOT be called back",
-				calledback);
+		assertThat(calledback).as("ManagedService#updated(props)/ManagedServiceFactory#updated(pid,props) must NOT be called back").isFalse();
 	}
 
 	private int assertDeletedCallback(SynchronizerImpl sync, int count) {
 		boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, ++count,
 				true);
-		assertTrue("ManagedServiceFactory#deleted(pid) must be called back",
-				calledback);
+		assertThat(calledback).as("ManagedServiceFactory#deleted(pid) must be called back").isTrue();
 		return count;
 	}
 
 	private void assertDeletedNoCallback(SynchronizerImpl sync, int count) {
 		boolean calledback = sync.waitForSignal(SIGNAL_WAITING_TIME, count + 1,
 				true);
-		assertFalse(
-				"ManagedServiceFactory#deleted(pid) must NOT be called back",
-				calledback);
+		assertThat(calledback).as("ManagedServiceFactory#deleted(pid) must NOT be called back").isFalse();
 	}
 
 	private void cleanUpForCallbackTest(final Bundle bundleT1,
@@ -6231,8 +6083,9 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistration9_1_1() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -6246,10 +6099,10 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl();
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl();
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.setCPtoBundle(null, null, bundleT1, false);
@@ -6257,35 +6110,35 @@ public class CMControl extends DefaultTestBundleControl {
 			this.startTargetBundle(bundleT1);
 			// this.setInappropriatePermission();
 
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			this.setAppropriatePermission();
 			Configuration conf = cm.getConfiguration(pid1,
 					bundleT1.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_1);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("Conf is being deleted.");
+			System.out.println("Conf is being deleted.");
 			conf.delete();
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_2, count1_2);
 		} finally {
 			this.cleanUpForCallbackTest(bundleT1, null, null, list);
@@ -6295,17 +6148,18 @@ public class CMControl extends DefaultTestBundleControl {
 	private void restartCM() throws BundleException {
 		Bundle cmBundle = stopCmBundle();
 		cmBundle.stop();
-		trace("CM has been stopped.");
+		System.out.println("CM has been stopped.");
 		startCmBundle(cmBundle);
-		trace("CM has been started.");
+		System.out.println("CM has been started.");
 	}
 
 	/**
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistration9_1_2() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -6316,39 +6170,38 @@ public class CMControl extends DefaultTestBundleControl {
 
 		int micro = 0;
 		traceTestId(header, ++micro);
-		trace("The configuration is being created");
+		System.out.println("The configuration is being created");
 		Configuration conf = cm.getConfiguration(pid1, bundleT1.getLocation());
-		trace("The configuration is being updated ");
+		System.out.println("The configuration is being updated ");
 		Dictionary<String,Object> props = new Hashtable<>();
 		props.put("StringKey", "stringvalue");
 		conf.update(props);
 
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl();
-			list.add(getContext().registerService(Synchronizer.class,
+			list.add(context.registerService(Synchronizer.class,
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl();
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.setCPtoBundle(null, null, bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
 
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("null props must be called back", sync1_1.getProps());
-			assertEquals("Check props", "stringvalue",
-					sync1_1.getProps().get("StringKey"));
+			assertThat(sync1_1.getProps()).as("null props must be called back").isNotNull();
+			assertThat(sync1_1.getProps().get("StringKey")).as("Check props").isEqualTo("stringvalue");
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("Conf is being deleted.");
+			System.out.println("Conf is being deleted.");
 			conf.delete();
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_2, count1_2);
 		} finally {
 			this.cleanUpForCallbackTest(bundleT1, null, null, list);
@@ -6360,9 +6213,9 @@ public class CMControl extends DefaultTestBundleControl {
 	 * @throws Exception
 	 */
 	// public void testManagedServiceRegistration9_2_1() throws Exception {
-	// final Bundle bundleT1 = getContext().installBundle(
+	// final Bundle bundleT1 = context.installBundle(
 	// getWebServer() + "bundleT1.jar");
-	// final Bundle bundleT2 = getContext().installBundle(
+	// final Bundle bundleT2 = context.installBundle(
 	// getWebServer() + "bundleT2.jar");
 	// final String locationT2 = bundleT2.getLocation();
 	// final String pid1 = Util.createPid("pid1");
@@ -6380,46 +6233,46 @@ public class CMControl extends DefaultTestBundleControl {
 	//
 	// try {
 	// SynchronizerImpl sync1_1 = new SynchronizerImpl();
-	// list.add(getContext().registerService(Synchronizer.class.getName(),
+	// list.add(context.registerService(Synchronizer.class.getName(),
 	// sync1_1, propsForSync1_1));
 	// SynchronizerImpl sync1_2 = new SynchronizerImpl();
-	// list.add(getContext().registerService(Synchronizer.class.getName(),
+	// list.add(context.registerService(Synchronizer.class.getName(),
 	// sync1_2, propsForSync1_2));
 	// this.startTargetBundle(bundleT1);
-	// trace("Wait for signal.");
+	// System.out.println("Wait for signal.");
 	// int count1_1 = 0;
 	// count1_1 = assertCallback(sync1_1, count1_1);
-	// assertNull("called back with null props", sync1_1.getProps());
+	// assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 	// int count1_2 = 0;
 	// count1_2 = assertCallback(sync1_2, count1_2);
-	// assertNull("called back with null props", sync1_2.getProps());
+	// assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 	//
-	// trace("The configuration is being created");
+	// System.out.println("The configuration is being created");
 	//
 	// Configuration conf = cm.getConfiguration(pid1, bundleT2
 	// .getLocation());
-	// trace("Wait for signal.");
+	// System.out.println("Wait for signal.");
 	// assertNoCallback(sync1_1, count1_1);
 	//
-	// trace("The configuration is being updated ");
+	// System.out.println("The configuration is being updated ");
 	// Dictionary<String,Object> props = new Hashtable<>();
 	// props.put("StringKey", "stringvalue");
 	// conf.update(props);
-	// trace("Wait for signal.");
+	// System.out.println("Wait for signal.");
 	// assertNoCallback(sync1_1, count1_1);
 	// assertNoCallback(sync1_2, count1_2);
 	//
 	// // restartCM();
 	// // conf = cm.getConfiguration(pid1, bundleT2.getLocation());
-	// // trace("Wait for signal.");
+	// // System.out.println("Wait for signal.");
 	// // count1_1 = assertCallback(sync1_1, count1_1);
 	// // count1_2 = assertCallback(sync1_2, count1_2);
-	// // assertNull("called back with null props", sync1_2.getProps());
+	// // assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 	// //
-	// // trace("conf is going to be deleted.");
+	// // System.out.println("conf is going to be deleted.");
 	// // conf.delete();
 	// // count1_1 = assertCallback(sync1_1, count1_1);
-	// // assertNull("called back with null props", sync1_1.getProps());
+	// // assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 	// // this.assertNoCallback(sync1_2, count1_2);
 	//
 	// } finally {
@@ -6428,19 +6281,21 @@ public class CMControl extends DefaultTestBundleControl {
 	// }
 	//
 
+	@Test
 	public void testManagedServiceRegistration9_2_1() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		internalManagedServiceRegistration9_2_1to2(2, bundleT2.getLocation(),
 				ConfigurationPermission.TARGET, bundleT1, bundleT2);
 	}
 
+	@Test
 	public void testManagedServiceRegistration9_2_2() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		internalManagedServiceRegistration9_2_1to2(3, "*",
 				ConfigurationPermission.TARGET, bundleT1, bundleT2);
@@ -6466,36 +6321,36 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl();
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl();
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 
 			Configuration conf = cm.getConfiguration(pid1,
 					bundleT2.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("conf is going to be deleted.");
+			System.out.println("conf is going to be deleted.");
 			conf.delete();
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
@@ -6508,19 +6363,21 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistration9_2_4() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		internalManagedServiceRegistration9_2_4to5(4, bundleT2.getLocation(),
 				"target", bundleT1, bundleT2);
 	}
 
+	@Test
 	public void testManagedServiceRegistration9_2_5() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		internalManagedServiceRegistration9_2_4to5(5, "*", "target", bundleT1,
 				bundleT2);
@@ -6541,10 +6398,10 @@ public class CMControl extends DefaultTestBundleControl {
 		int micro1 = 0;
 		traceTestId(header, ++micro1);
 
-		trace("The configuration is being created");
+		System.out.println("The configuration is being created");
 		Configuration conf = cm.getConfiguration(pid1, bundleT2.getLocation());
 
-		trace("The configuration is being updated ");
+		System.out.println("The configuration is being updated ");
 		Dictionary<String,Object> props = new Hashtable<>();
 		props.put("StringKey", "stringvalue");
 		conf.update(props);
@@ -6552,21 +6409,21 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("Conf is being deleted.");
+			System.out.println("Conf is being deleted.");
 			conf.delete();
 			this.assertNoCallback(sync1_1, count1_1);
 			this.assertNoCallback(sync1_2, count1_2);
@@ -6580,15 +6437,16 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistrationMultipleTargets_10_1_1()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
-		final Bundle bundleT4 = getContext().installBundle(
+		final Bundle bundleT4 = context.installBundle(
 				getWebServer() + "bundleT4.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(7);
@@ -6602,26 +6460,26 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSync2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSync3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSync3_2));
 			SynchronizerImpl sync4_1 = new SynchronizerImpl("4-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_1, propsForSync4_1));
 			SynchronizerImpl sync4_2 = new SynchronizerImpl("4-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_2, propsForSync4_2));
 
 			this.resetPermissions();
@@ -6631,40 +6489,40 @@ public class CMControl extends DefaultTestBundleControl {
 			this.setCPtoBundle("?RegionA", "target", bundleT4, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT2);
 			int count2_1 = 0;
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNull("called back with null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT3);
 			int count3_1 = 0;
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNull("called back with null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with null props").isNull();
 			int count3_2 = 0;
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNull("called back with null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT4);
 			// TODO Called back twice each pid.
 			// int count4_1 = 0;
 			int count4_1 = 1;
 			count4_1 = assertCallback(sync4_1, count4_1);
-			assertNull("called back with null props", sync4_1.getProps());
+			assertThat(sync4_1.getProps()).as("called back with null props").isNull();
 			// count4_1 = 2
 			// int count4_2 = 0;
 			int count4_2 = 1;
 			count4_2 = assertCallback(sync4_2, count4_2);
-			assertNull("called back with null props", sync4_2.getProps());
+			assertThat(sync4_2.getProps()).as("called back with null props").isNull();
 			// count4_2 = 2
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
@@ -6674,40 +6532,40 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync4_1, count4_1);
 			assertNoCallback(sync4_2, count4_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
 
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
-			assertNotNull("called back with Non-null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with Non-null props").isNotNull();
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNotNull("called back with Non-null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNotNull("called back with Non-null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNotNull("called back with Non-null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with Non-null props").isNotNull();
 			count4_1 = assertCallback(sync4_1, count4_1);
-			assertNotNull("called back with Non-null props", sync4_1.getProps());
+			assertThat(sync4_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync4_2, count4_2);
 
-			trace("conf is going to be deleted.");
+			System.out.println("conf is going to be deleted.");
 			conf.delete();
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_2, count1_2);
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNull("called back with null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNull("called back with null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with null props").isNull();
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNull("called back with null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with null props").isNull();
 			count4_1 = assertCallback(sync4_1, count4_1);
-			assertNull("called back with null props", sync4_1.getProps());
+			assertThat(sync4_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync4_2, count4_2);
 		} finally {
 			cleanUpForCallbackTest(bundleT1, bundleT2, bundleT3, bundleT4, list);
@@ -6720,15 +6578,16 @@ public class CMControl extends DefaultTestBundleControl {
 	 *
 	 * @throws Exception
 	 */
+	@Test
 	public void testManagedServiceRegistrationMultipleTargets_10_1_2()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
-		final Bundle bundleT4 = getContext().installBundle(
+		final Bundle bundleT4 = context.installBundle(
 				getWebServer() + "bundleT4.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -6742,26 +6601,26 @@ public class CMControl extends DefaultTestBundleControl {
 
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSync2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSync3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSync3_2));
 			SynchronizerImpl sync4_1 = new SynchronizerImpl("4-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_1, propsForSync4_1));
 			SynchronizerImpl sync4_2 = new SynchronizerImpl("4-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_2, propsForSync4_2));
 
 			this.resetPermissions();
@@ -6771,37 +6630,37 @@ public class CMControl extends DefaultTestBundleControl {
 			this.setCPtoBundle("?RegionA", "target", bundleT4, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT2);
 			int count2_1 = 0;
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNull("called back with null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT3);
 			int count3_1 = 0;
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNull("called back with null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with null props").isNull();
 			int count3_2 = 0;
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNull("called back with null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT4);
 			// int count4_1 = 0;
 			int count4_1 = 1;
 			count4_1 = assertCallback(sync4_1, count4_1);
-			assertNull("called back with null props", sync4_1.getProps());
+			assertThat(sync4_1.getProps()).as("called back with null props").isNull();
 			// int count4_2 = 0;
 			int count4_2 = 1;
 			count4_2 = assertCallback(sync4_2, count4_2);
-			assertNull("called back with null props", sync4_2.getProps());
+			assertThat(sync4_2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
@@ -6810,33 +6669,33 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync4_1, count4_1);
 			assertNoCallback(sync4_2, count4_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
 
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 			count4_1 = assertCallback(sync4_1, count4_1);
-			assertNotNull("called back with Non-null props", sync4_1.getProps());
+			assertThat(sync4_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync4_2, count4_2);
 
-			trace("conf is going to be deleted.");
+			System.out.println("conf is going to be deleted.");
 			conf.delete();
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 			count4_1 = assertCallback(sync4_1, count4_1);
-			assertNull("called back with null props", sync4_1.getProps());
+			assertThat(sync4_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync4_2, count4_2);
 		} finally {
 			cleanUpForCallbackTest(bundleT1, bundleT2, bundleT3, bundleT4, list);
@@ -6844,6 +6703,7 @@ public class CMControl extends DefaultTestBundleControl {
 
 	}
 
+	@Test
 	public void testManagedServiceRegistrationMultipleTargets_10_2_1()
 			throws Exception {
 	    System.setProperty("org.osgi.test.cases.cm.bundleT4.mode","Array" );
@@ -6854,6 +6714,7 @@ public class CMControl extends DefaultTestBundleControl {
 	    }
 	}
 
+	@Test
 	public void testManagedServiceRegistrationMultipleTargets_10_2_2()
 			throws Exception {
 		System.setProperty("org.osgi.test.cases.cm.bundleT4.mode", "Vector");
@@ -6864,6 +6725,7 @@ public class CMControl extends DefaultTestBundleControl {
         }
 	}
 
+	@Test
 	public void testManagedServiceRegistrationMultipleTargets_10_2_3()
 			throws Exception {
 		System.setProperty("org.osgi.test.cases.cm.bundleT4.mode", "List");
@@ -6876,13 +6738,13 @@ public class CMControl extends DefaultTestBundleControl {
 
 	private void internalTestManagedServiceRegistrationMultipleTargets_10_2_1to3()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
-		final Bundle bundleT4 = getContext().installBundle(
+		final Bundle bundleT4 = context.installBundle(
 				getWebServer() + "bundleT4.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -6893,34 +6755,34 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSync2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSync3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSync3_2));
 			SynchronizerImpl sync4_1 = new SynchronizerImpl("4-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_1, propsForSync4_1));
 			SynchronizerImpl sync4_2 = new SynchronizerImpl("4-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_2, propsForSync4_2));
 
 			this.resetPermissions();
@@ -6930,64 +6792,65 @@ public class CMControl extends DefaultTestBundleControl {
 			this.setCPtoBundle("?RegionA", "target", bundleT4, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT2);
 			int count2_1 = 0;
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNotNull("called back with NON-null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with NON-null props").isNotNull();
 			this.startTargetBundle(bundleT3);
 			int count3_1 = 0;
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNotNull("called back with NON-null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with NON-null props").isNotNull();
 			int count3_2 = 0;
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNotNull("called back with NON-null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with NON-null props").isNotNull();
 			this.startTargetBundle(bundleT4);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 
 			// MS for pid2, pid1; two callbacks expected
 			int count4_1 = 0;
 			count4_1 = assertCallback(sync4_1, count4_1+1);
-			assertEquals("expect two callbacks", count4_1, 2);
-			assertNotNull("called back with NON-null props", sync4_1.getProps());
+			assertThat(2).as("expect two callbacks").isEqualTo(count4_1);
+			assertThat(sync4_1.getProps()).as("called back with NON-null props").isNotNull();
 
 	 		// MS for pid2, pid3; two callbacks expected
 			int count4_2 = 0;
 			count4_2 = assertCallback(sync4_2, count4_2+1);
-			assertEquals("expect two callbacks", count4_2, 2);
-			assertNull("called back with null props", sync4_2.getProps());
+			assertThat(2).as("expect two callbacks").isEqualTo(count4_2);
+			assertThat(sync4_2.getProps()).as("called back with null props").isNull();
 
-			// trace("conf is going to be deleted.");
+			// System.out.println("conf is going to be deleted.");
 			// conf.delete();
 			// assertNoCallback(sync1_1, count1_1);
 			// assertNoCallback(sync1_2, count1_2);
 			// count2_1 = assertCallback(sync2_1, count2_1);
-			// assertNull("called back with null props", sync2_1.getProps());
+			// assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 			// count3_1 = assertCallback(sync3_1, count3_1);
-			// assertNull("called back with null props", sync3_1.getProps());
+			// assertThat(sync3_1.getProps()).as("called back with null props").isNull();
 			// count3_2 = assertCallback(sync3_2, count3_2);
-			// assertNull("called back with null props", sync3_2.getProps());
+			// assertThat(sync3_2.getProps()).as("called back with null props").isNull();
 		} finally {
 
 			cleanUpForCallbackTest(bundleT1, bundleT2, bundleT3, bundleT4, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceRegistrationMultipleTargets_10_2_4()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
-		final Bundle bundleT4 = getContext().installBundle(
+		final Bundle bundleT4 = context.installBundle(
 				getWebServer() + "bundleT4.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7000,34 +6863,34 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSync2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSync3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSync3_2));
 			SynchronizerImpl sync4_1 = new SynchronizerImpl("4-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_1, propsForSync4_1));
 			SynchronizerImpl sync4_2 = new SynchronizerImpl("4-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync4_2, propsForSync4_2));
 
 			this.resetPermissions();
@@ -7037,66 +6900,66 @@ public class CMControl extends DefaultTestBundleControl {
 			this.setCPtoBundle("?RegionA", "target", bundleT4, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT2);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count2_1 = 0;
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNull("called back with null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT3);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count3_1 = 0;
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNull("called back with null props", sync3_1.getProps());
-			// assertNotNull("called back with NON-null props",
-			// sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with null props").isNull();
+			// assertThat(// sync3_1.getProps()).as("called back with NON-null props").isNotNull();
 			int count3_2 = 0;
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNull("called back with null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with null props").isNull();
 
 			String mode = System
 					.getProperty("org.osgi.test.cases.cm.bundleT4.mode");
 			System.out.println("##########################" + mode);
 
 			this.startTargetBundle(bundleT4);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count4_1 = 0;
 			count4_1 = assertCallback(sync4_1, count4_1);
 			// ignore actual call back properties, might already have been overwritten
 			count4_1 = assertCallback(sync4_1, count4_1);
-			assertNotNull("called back with NON-null props", sync4_1.getProps());
+			assertThat(sync4_1.getProps()).as("called back with NON-null props").isNotNull();
 			int count4_2 = 0;
 			count4_2 = assertCallback(sync4_2, count4_2);
 			// ignore actual call back properties, might already have been overwritten
 			count4_2 = assertCallback(sync4_2, count4_2);
-			assertNull("called back with null props", sync4_2.getProps());
+			assertThat(sync4_2.getProps()).as("called back with null props").isNull();
 
-			// trace("conf is going to be deleted.");
+			// System.out.println("conf is going to be deleted.");
 			// conf.delete();
 			// assertNoCallback(sync1_1, count1_1);
 			// assertNoCallback(sync1_2, count1_2);
 			// count2_1 = assertCallback(sync2_1, count2_1);
-			// assertNull("called back with null props", sync2_1.getProps());
+			// assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 			// count3_1 = assertCallback(sync3_1, count3_1);
-			// assertNull("called back with null props", sync3_1.getProps());
+			// assertThat(sync3_1.getProps()).as("called back with null props").isNull();
 			// count3_2 = assertCallback(sync3_2, count3_2);
-			// assertNull("called back with null props", sync3_2.getProps());
+			// assertThat(sync3_2.getProps()).as("called back with null props").isNull();
 		} finally {
 			cleanUpForCallbackTest(bundleT1, bundleT2, bundleT3, bundleT4, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceRegistrationMultipleTargets_11_1_1()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7111,89 +6974,86 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSync2_1));
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 			this.startTargetBundle(bundleT2);
 			int count2_1 = 0;
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNull("called back with null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with null props").isNull();
 
 			this.printoutPermissions();
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1, false);
 			this.setCPtoBundle("*", "target", bundleT2, false);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, null);
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
-			sleep(3000);
+			settle(3000);
 
 			if(conf.getBundleLocation().equals(bundleT1.getLocation())){
 				count1_1 = assertCallback(sync1_1, count1_1);
-				assertNotNull("called back with NON-null props",
-						sync1_1.getProps());
+				assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 				assertNoCallback(sync1_2, count1_2);
 				assertNoCallback(sync2_1, count2_1);
-				assertEquals("conf.location must be dynamically set to location of T1.",
-						conf.getBundleLocation(),bundleT1.getLocation());
+				assertThat(bundleT1.getLocation()).as("conf.location must be dynamically set to location of T1.").isEqualTo(conf.getBundleLocation());
 				bundleT1.stop();
 				bundleT1.uninstall();
 				props.put("StringKey", "stringvalueNew");
-				trace("The configuration is being updated ");
+				System.out.println("The configuration is being updated ");
 				conf.update(props);
 				count2_1 = assertCallback(sync2_1, count2_1);
-				assertNotNull("called back with NON-null props",sync2_1.getProps());
+				assertThat(sync2_1.getProps()).as("called back with NON-null props").isNotNull();
 				bundleT2.stop();
 				bundleT2.uninstall();
 			}else if(conf.getBundleLocation().equals(bundleT2.getLocation())){
 				assertNoCallback(sync1_1, count1_1);
 				assertNoCallback(sync1_2, count1_2);
 				count2_1 = assertCallback(sync2_1, count2_1);
-				assertNotNull("called back with NON-null props",
-						sync2_1.getProps());
-				assertEquals("conf.location must be dynamically set to location of T2.",
-						conf.getBundleLocation(),bundleT2.getLocation());
-				trace("The bound bundleT2 is going to unregister MS.");
+				assertThat(sync2_1.getProps()).as("called back with NON-null props").isNotNull();
+				assertThat(bundleT2.getLocation()).as("conf.location must be dynamically set to location of T2.").isEqualTo(conf.getBundleLocation());
+				System.out.println("The bound bundleT2 is going to unregister MS.");
 				bundleT2.stop();
 				bundleT2.uninstall();
 				props.put("StringKey", "stringvalueNew");
-				trace("The configuration is being updated ");
+				System.out.println("The configuration is being updated ");
 				conf.update(props);
 				count1_1 = assertCallback(sync1_1, count1_1);
-				assertNotNull("called back with NON-null props",sync1_1.getProps());
+				assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 				assertNoCallback(sync1_2, count1_2);
 				bundleT1.stop();
 				bundleT1.uninstall();
 			}else{
-				fail();
+				fail("");
 			}
 		} finally {
 			cleanUpForCallbackTest(null, null, null, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceChangeLocation_12_1_1() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7204,41 +7064,41 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1,
 					bundleT2.getLocation());
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("?RegionA", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("conf.setBundleLocation() is being called.");
+			System.out.println("conf.setBundleLocation() is being called.");
 			conf.setBundleLocation("?RegionA");
 
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			// count1_2 = assertCallback(sync1_2, count1_2);
-			// assertNull("called back with null props", sync1_2.getProps());
+			// assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
 		} finally {
 
@@ -7246,10 +7106,11 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceChangeLocation_12_1_2() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7260,39 +7121,38 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("?RegionA", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
-			assertEquals("conf.location must be set to \"?RegionA\".",
-					conf.getBundleLocation(), "?RegionA");
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
+			assertThat("?RegionA").as("conf.location must be set to \"?RegionA\".").isEqualTo(conf.getBundleLocation());
 
-			trace("conf.setBundleLocation() is being called.");
+			System.out.println("conf.setBundleLocation() is being called.");
 			conf.setBundleLocation(bundleT2.getLocation());
 
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_2, count1_2);
 		} finally {
 
@@ -7300,10 +7160,11 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceChangeLocation_12_1_3() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7314,47 +7175,47 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("?RegionA", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
-			assertEquals("conf.location must be set to \"?RegionA\".",
-					conf.getBundleLocation(), "?RegionA");
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
+			assertThat("?RegionA").as("conf.location must be set to \"?RegionA\".").isEqualTo(conf.getBundleLocation());
 
-			trace("conf.setBundleLocation() is being called.");
+			System.out.println("conf.setBundleLocation() is being called.");
 			conf.setBundleLocation("?RegionB");
 
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_2, count1_2);
 		} finally {
 			cleanUpForCallbackTest(bundleT1, bundleT2, null, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceChangeCP_12_2_1() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7367,36 +7228,36 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
 			this.setCPtoBundle("?RegionA", "target", bundleT1, false);
@@ -7404,10 +7265,10 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync1_2, count1_2);
 
 			props.put("StringKey", "stringvalueNew");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 			//count1_1 = assertCallback(sync1_1, count1_1);
-			//assertNull("called back with null props", sync1_1.getProps());
+			//assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
@@ -7416,8 +7277,9 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceChangeCP_12_2_2() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7430,32 +7292,32 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("?RegionA", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
@@ -7465,18 +7327,19 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync1_2, count1_2);
 
 			props.put("StringKey", "stringvalueNew");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 		} finally {
 			cleanUpForCallbackTest(bundleT1, null, null, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceStartCM_12_3_1() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
 
@@ -7489,35 +7352,36 @@ public class CMControl extends DefaultTestBundleControl {
 			Bundle cmBundle = this.stopCmBundle();
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			int count1_2 = 0;
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("CM is going to start");
+			System.out.println("CM is going to start");
 			startCmBundle(cmBundle);
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 		} finally {
 			cleanUpForCallbackTest(bundleT1, null, null, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceStartCM_12_3_2() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7528,45 +7392,46 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
-			assertNotNull(conf);
+			assertThat(conf).isNotNull();
 			// Dictionary<String,Object> props = new Hashtable<>();
 			// props.put("StringKey", "stringvalue");
-			// trace("The configuration is being updated ");
+			// System.out.println("The configuration is being updated ");
 			// conf.update(props);
             Bundle cmBundle = this.stopCmBundle();
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			int count1_2 = 0;
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("CM is going to start");
+			System.out.println("CM is going to start");
 			startCmBundle(cmBundle);
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 		} finally {
 			cleanUpForCallbackTest(bundleT1, null, null, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceStartCM_12_3_3() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -7577,44 +7442,45 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?RegionA");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
             Bundle cmBundle = this.stopCmBundle();
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			int count1_2 = 0;
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("CM is going to start");
+			System.out.println("CM is going to start");
 			startCmBundle(cmBundle);
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 		} finally {
 			cleanUpForCallbackTest(bundleT1, null, null, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceModifyPid_12_4_1() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		final String pid2 = Util.createPid("pid2");
@@ -7628,43 +7494,43 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
 			// modify PID
-			trace("modify PID from " + pid1 + " to " + pid2);
+			System.out.println("modify PID from " + pid1 + " to " + pid2);
 			modifyPid(ManagedService.class.getName(), pid1, pid2);
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			assertNoCallback(sync1_2, count1_2);
 
 		} finally {
@@ -7672,8 +7538,9 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceModifyPid_12_4_2() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String pid1 = Util.createPid("pid1");
 		final String pid2 = Util.createPid("pid2");
@@ -7687,73 +7554,74 @@ public class CMControl extends DefaultTestBundleControl {
 		try {
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSync1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSync1_2));
 
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNull("called back with null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with null props").isNull();
 			int count1_2 = 0;
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNull("called back with null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with null props").isNull();
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.getConfiguration(pid1, "?");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf.update(props);
 
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
 			// modify PID
-			trace("modify PID from " + pid2 + " to " + pid1);
+			System.out.println("modify PID from " + pid2 + " to " + pid1);
 			modifyPid(ManagedService.class.getName(), pid2, pid1);
 			assertNoCallback(sync1_1, count1_1);
 			count1_1 = assertCallback(sync1_2, count1_2);
-			assertNotNull("called back with NON-null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with NON-null props").isNotNull();
 		} finally {
 			cleanUpForCallbackTest(bundleT1, null, null, list);
 		}
 	}
 
 	private void modifyPid(String clazz, String oldPid, String newPid) {
-		ServiceReference< ? > reference1 = this.getContext()
+		ServiceReference< ? > reference1 = this.context
 				.getServiceReference(
 				ModifyPid.class.getName());
-		ModifyPid modifyPid = (ModifyPid) this.getContext().getService(
+		ModifyPid modifyPid = (ModifyPid) this.context.getService(
 				reference1);
 
 		ServiceReference< ? >[] references = null;
 		try {
-			references = this.getContext().getServiceReferences(clazz,
+			references = this.context.getServiceReferences(clazz,
 					"(service.pid=" + oldPid + ")");
 		} catch (InvalidSyntaxException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		trace("The pid of MS1-1 is being changed from " + oldPid + " to "
+		System.out.println("The pid of MS1-1 is being changed from " + oldPid + " to "
 				+ newPid);
 		modifyPid.changeMsPid(
 				(Long) (references[0].getProperty(Constants.SERVICE_ID)),
 				newPid);
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistration13_1_1() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -7775,43 +7643,40 @@ public class CMControl extends DefaultTestBundleControl {
 			boolean toBeCalledBack) throws BundleException, IOException {
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("F1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("F1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			int count1_1 = 0;
 			int count1_2 = 0;
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1, location);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			if (toBeCalledBack) {
 				count1_1 = assertCallback(sync1_1, count1_1);
 				props = sync1_1.getProps();
-				assertNotNull("null props must be called back", props);
-				assertNotNull("pid", props.get(Constants.SERVICE_PID));
-				assertFalse("pid",
-						props.get(Constants.SERVICE_PID).equals(fpid1));
-				assertEquals("fpid", fpid1,
-						props.get(ConfigurationAdmin.SERVICE_FACTORYPID));
-				assertEquals("value", "stringvalue", props.get("stringkey"));
-				assertNull("bundleLocation must be not included",
-						props.get("service.bundleLocation"));
-				assertEquals("Size of props must be 3", 3, props.size());
+				assertThat(props).as("null props must be called back").isNotNull();
+				assertThat(props.get(Constants.SERVICE_PID)).as("pid").isNotNull();
+				assertThat(props.get(Constants.SERVICE_PID).equals(fpid1)).as("pid").isFalse();
+				assertThat(props.get(ConfigurationAdmin.SERVICE_FACTORYPID)).as("fpid").isEqualTo(fpid1);
+				assertThat(props.get("stringkey")).as("value").isEqualTo("stringvalue");
+				assertThat(props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+				assertThat(props.size()).as("Size of props must be 3").isEqualTo(3);
 			} else {
 				assertNoCallback(sync1_1, count1_1);
 			}
@@ -7821,16 +7686,13 @@ public class CMControl extends DefaultTestBundleControl {
 			if (toBeCalledBack) {
 				count1_1 = assertCallback(sync1_1, count1_1);
 				props = sync1_1.getProps();
-				assertNotNull("null props must be called back", props);
-				assertNotNull("pid", props.get(Constants.SERVICE_PID));
-				assertFalse("pid",
-						props.get(Constants.SERVICE_PID).equals(fpid1));
-				assertEquals("fpid", fpid1,
-						props.get(ConfigurationAdmin.SERVICE_FACTORYPID));
-				assertEquals("value", "stringvalue", props.get("stringkey"));
-				assertNull("bundleLocation must be not included",
-						props.get("service.bundleLocation"));
-				assertEquals("Size of props must be 3", 3, props.size());
+				assertThat(props).as("null props must be called back").isNotNull();
+				assertThat(props.get(Constants.SERVICE_PID)).as("pid").isNotNull();
+				assertThat(props.get(Constants.SERVICE_PID).equals(fpid1)).as("pid").isFalse();
+				assertThat(props.get(ConfigurationAdmin.SERVICE_FACTORYPID)).as("fpid").isEqualTo(fpid1);
+				assertThat(props.get("stringkey")).as("value").isEqualTo("stringvalue");
+				assertThat(props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+				assertThat(props.size()).as("Size of props must be 3").isEqualTo(3);
 			} else {
 				assertNoCallback(sync1_1, count1_1);
 			}
@@ -7841,8 +7703,9 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistration13_1_2() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -7855,51 +7718,49 @@ public class CMControl extends DefaultTestBundleControl {
 		this.setCPtoBundle(null, null, bundleT1, false);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("F1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("F1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					bundleT1.getLocation());
 
 			int count1_1 = 0;
 			int count1_2 = 0;
 
-			trace("Bundle is going to start.");
+			System.out.println("Bundle is going to start.");
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("Bundle is going to stop.");
+			System.out.println("Bundle is going to stop.");
 			bundleT1.stop();
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
 
-			trace("Bundle is going to start.");
+			System.out.println("Bundle is going to start.");
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
 			props = sync1_1.getProps();
-			assertNotNull("null props must be called back", props);
-			assertNotNull("pid", props.get(Constants.SERVICE_PID));
-			assertFalse("pid", props.get(Constants.SERVICE_PID).equals(fpid1));
-			assertEquals("fpid", fpid1,
-					props.get(ConfigurationAdmin.SERVICE_FACTORYPID));
-			assertEquals("value", "stringvalue", props.get("stringkey"));
-			assertNull("bundleLocation must be not included",
-					props.get("service.bundleLocation"));
-			assertEquals("Size of props must be 3", 3, props.size());
+			assertThat(props).as("null props must be called back").isNotNull();
+			assertThat(props.get(Constants.SERVICE_PID)).as("pid").isNotNull();
+			assertThat(props.get(Constants.SERVICE_PID).equals(fpid1)).as("pid").isFalse();
+			assertThat(props.get(ConfigurationAdmin.SERVICE_FACTORYPID)).as("fpid").isEqualTo(fpid1);
+			assertThat(props.get("stringkey")).as("value").isEqualTo("stringvalue");
+			assertThat(props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+			assertThat(props.size()).as("Size of props must be 3").isEqualTo(3);
 
-			trace("The configuration is being deleted. Wait for signal.");
+			System.out.println("The configuration is being deleted. Wait for signal.");
 			conf.delete();
 			this.assertDeletedCallback(sync1_1, 0);
 			this.assertDeletedNoCallback(sync1_2, 0);
@@ -7908,10 +7769,11 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistration13_2_2() throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -7929,10 +7791,11 @@ public class CMControl extends DefaultTestBundleControl {
 				bundleT2.getLocation(), false);
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistration13_2_5() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		Bundle bundleT2 = getContext().installBundle(
+		Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -7945,52 +7808,48 @@ public class CMControl extends DefaultTestBundleControl {
 		this.setCPtoBundle(null, null, bundleT1, false);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("F1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("F1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					bundleT2.getLocation());
 			int count1_1 = 0;
 			int count1_2 = 0;
 			this.resetPermissions();
 			this.setCPtoBundle("*", "target", bundleT1);
-			trace("Bundle is going to start.");
+			System.out.println("Bundle is going to start.");
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("Bundle is going to stop.");
+			System.out.println("Bundle is going to stop.");
 			bundleT1.stop();
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Bundle is going to start.");
+			System.out.println("Bundle is going to start.");
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			// count1_1 = assertCallback(sync1_1, count1_1);
-			// assertNotNull("called back with NON-null props",
-			// sync1_1.getProps());
+			// assertThat(// sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			// props = sync1_1.getProps();
-			// assertNotNull("null props must be called back", props);
-			// assertNotNull("pid", props.get(Constants.SERVICE_PID));
-			// assertFalse("pid",
-			// props.get(Constants.SERVICE_PID).equals(fpid1));
-			// assertEquals("fpid", fpid1,
-			// props.get(ConfigurationAdmin.SERVICE_FACTORYPID));
-			// assertEquals("value", "stringvalue", props.get("stringkey"));
-			// assertNull("bundleLocation must be not included",
-			// props.get("service.bundleLocation"));
-			// assertEquals("Size of props must be 3", 3, props.size());
+			// assertThat(props).as("null props must be called back").isNotNull();
+			// assertThat(props.get(Constants.SERVICE_PID)).as("pid").isNotNull();
+			// assertThat(// props.get(Constants.SERVICE_PID).equals(fpid1)).as("pid").isFalse();
+			// assertThat(// props.get(ConfigurationAdmin.SERVICE_FACTORYPID)).as("fpid").isEqualTo(fpid1);
+			// assertThat(props.get("stringkey")).as("value").isEqualTo("stringvalue");
+			// assertThat(// props.get("service.bundleLocation")).as("bundleLocation must be not included").isNull();
+			// assertThat(props.size()).as("Size of props must be 3").isEqualTo(3);
 
-			trace("The configuration is being deleted. Wait for signal.");
+			System.out.println("The configuration is being deleted. Wait for signal.");
 			conf.delete();
 			this.assertDeletedNoCallback(sync1_1, 0);
 			// count1_1 = this.assertDeletedCallback(sync1_1, 0);
@@ -8001,15 +7860,16 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_14_1_1()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
-		// final Bundle bundleT4 = getContext().installBundle(
+		// final Bundle bundleT4 = context.installBundle(
 		// getWebServer() + "bundleT4.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8019,20 +7879,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSyncF3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8054,33 +7914,33 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNotNull("called back with Non-null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNotNull("called back with Non-null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNotNull("called back with Non-null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with Non-null props").isNotNull();
 
-			trace("conf is going to be deleted.");
+			System.out.println("conf is going to be deleted.");
 			conf.delete();
 			this.assertDeletedCallback(sync1_1, 0);
 			this.assertDeletedNoCallback(sync1_2, 0);
@@ -8092,15 +7952,16 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_14_1_2()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
-		// final Bundle bundleT4 = getContext().installBundle(
+		// final Bundle bundleT4 = context.installBundle(
 		// getWebServer() + "bundleT4.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8110,20 +7971,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSyncF3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8145,30 +8006,30 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("conf is going to be deleted.");
+			System.out.println("conf is going to be deleted.");
 			conf.delete();
 			this.assertDeletedCallback(sync1_1, 0);
 			this.assertDeletedNoCallback(sync1_2, 0);
@@ -8180,13 +8041,14 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_14_2_1()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8196,20 +8058,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSyncF3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8222,38 +8084,38 @@ public class CMControl extends DefaultTestBundleControl {
 			int count3_1 = 0;
 			int count3_2 = 0;
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
 
 			this.startTargetBundle(bundleT1);
-			sleep(1000);
-			trace("Wait for signal.");
+			settle(1000);
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			this.startTargetBundle(bundleT2);
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNotNull("called back with Non-null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with Non-null props").isNotNull();
 			this.startTargetBundle(bundleT3);
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNotNull("called back with Non-null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNotNull("called back with Non-null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with Non-null props").isNotNull();
 
-			trace("conf is going to be deleted.");
+			System.out.println("conf is going to be deleted.");
 			conf.delete();
 			this.assertDeletedCallback(sync1_1, 0);
 			this.assertDeletedNoCallback(sync1_2, 0);
@@ -8265,14 +8127,15 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_14_2_2()
 			throws Exception {
 
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8282,20 +8145,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSyncF3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8310,27 +8173,27 @@ public class CMControl extends DefaultTestBundleControl {
 			int count3_1 = 0;
 			int count3_2 = 0;
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
 
 			this.startTargetBundle(bundleT1);
-			sleep(1000);
-			trace("Wait for signal.");
+			settle(1000);
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			this.startTargetBundle(bundleT2);
 			assertNoCallback(sync2_1, count2_1);
@@ -8338,7 +8201,7 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("conf is going to be deleted.");
+			System.out.println("conf is going to be deleted.");
 			conf.delete();
 			this.assertDeletedCallback(sync1_1, 0);
 			this.assertDeletedNoCallback(sync1_2, 0);
@@ -8350,15 +8213,16 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_15_1_1()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		//final Bundle bundleT3 = getContext().installBundle(
+		//final Bundle bundleT3 = context.installBundle(
 		//		getWebServer() + "bundleT3.jar");
-		// final Bundle bundleT4 = getContext().installBundle(
+		// final Bundle bundleT4 = context.installBundle(
 		// getWebServer() + "bundleT4.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8368,20 +8232,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			//SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			//list.add(getContext().registerService(Synchronizer.class.getName(),
+			//list.add(context.registerService(Synchronizer.class.getName(),
 			//		sync3_1, propsForSyncF3_1));
 			//SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			//list.add(getContext().registerService(Synchronizer.class.getName(),
+			//list.add(context.registerService(Synchronizer.class.getName(),
 			//		sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8403,88 +8267,76 @@ public class CMControl extends DefaultTestBundleControl {
 			//assertNoCallback(sync3_1, count3_1);
 			//assertNoCallback(sync3_2, count3_2);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1, null);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			//assertNoCallback(sync3_1, count3_1);
 			//assertNoCallback(sync3_2, count3_2);
-//			assertEquals(
-//					"The location of the conf must be dynamically bound to bundleT2",
-//					bundleT2.getLocation(), conf.getBundleLocation());
+//			assertThat(//					bundleT2.getLocation()).isCloseTo(//					"The location of the conf must be dynamically bound to bundleT2", within(conf.getBundleLocation()));
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			sleep(1000);
+			settle(1000);
 			if(conf.getBundleLocation().equals(bundleT1.getLocation())){
-				trace("Wait for signal.");
+				System.out.println("Wait for signal.");
 				count1_1 = assertCallback(sync1_1, count1_1);
-				assertNotNull("called back with Non-null props", sync1_1.getProps());
+				assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 				assertNoCallback(sync1_2, count1_2);
 				assertNoCallback(sync2_1, count2_1);
-				assertEquals(
-						"The location of the conf must be dynamically bound to bundleT1",
-						bundleT1.getLocation(), conf.getBundleLocation());
-				trace("Bound bundleT1 is going to be stopped.");
+				assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically bound to bundleT1").isEqualTo(bundleT1.getLocation());
+				System.out.println("Bound bundleT1 is going to be stopped.");
 				bundleT1.stop();
 				bundleT1.uninstall();
-				sleep(1000);
-				assertEquals(
-						"The location of the conf must be dynamically bound to bundleT2",
-						bundleT2.getLocation(), conf.getBundleLocation());
+				settle(1000);
+				assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically bound to bundleT2").isEqualTo(bundleT2.getLocation());
 				count2_1 = assertCallback(sync2_1, count2_1);
-				trace("conf is going to be deleted.");
+				System.out.println("conf is going to be deleted.");
 				conf.delete();
 				this.assertDeletedCallback(sync2_1, 0);
 				bundleT2.stop();
 				bundleT2.uninstall();
 			}else if(conf.getBundleLocation().equals(bundleT2.getLocation())){
-				trace("Wait for signal.");
+				System.out.println("Wait for signal.");
 				assertNoCallback(sync1_1, count1_1);
 				assertNoCallback(sync1_2, count1_2);
 				count2_1 = assertCallback(sync2_1, count2_1);
-				assertNotNull("called back with Non-null props", sync2_1.getProps());
-				assertEquals(
-						"The location of the conf must be dynamically bound to bundleT2",
-						bundleT2.getLocation(), conf.getBundleLocation());
-				trace("Bound bundleT2 is going to be stopped.");
+				assertThat(sync2_1.getProps()).as("called back with Non-null props").isNotNull();
+				assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically bound to bundleT2").isEqualTo(bundleT2.getLocation());
+				System.out.println("Bound bundleT2 is going to be stopped.");
 				bundleT2.stop();
 				bundleT2.uninstall();
-				sleep(1000);
-				assertEquals(
-						"The location of the conf must be dynamically bound to bundleT1",
-						bundleT1.getLocation(), conf.getBundleLocation());
+				settle(1000);
+				assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically bound to bundleT1").isEqualTo(bundleT1.getLocation());
 				count1_1 = assertCallback(sync1_1, count1_1);
-				assertNotNull("called back with Non-null props", sync1_1.getProps());
+				assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 				assertNoCallback(sync1_2, count1_2);
-				trace("conf is going to be deleted.");
+				System.out.println("conf is going to be deleted.");
 				conf.delete();
 				this.assertDeletedCallback(sync1_1, 0);
 				this.assertDeletedNoCallback(sync1_2, 0);
 				bundleT1.stop();
 				bundleT1.uninstall();
 			}else{
-				fail();
+				fail("");
 			}
 
-			//trace("Wait for signal.");
+			//System.out.println("Wait for signal.");
 			//assertNoCallback(sync1_1, count1_1);
 			//assertNoCallback(sync1_2, count1_2);
 			//count2_1 = assertCallback(sync2_1, count2_1);
-			//assertNotNull("called back with Non-null props", sync2_1.getProps());
+			//assertThat(sync2_1.getProps()).as("called back with Non-null props").isNotNull();
 			//assertNoCallback(sync3_1, count3_1);
 			//assertNoCallback(sync3_2, count3_2);
 
-			//trace("Bound bundleT2 is going to be stopped.");
+			//System.out.println("Bound bundleT2 is going to be stopped.");
 			//bundleT2.stop();
-			//assertEquals(
-			//		"The location of the conf must be dynamically bound to bundleT3",
-			//		bundleT3.getLocation(), conf.getBundleLocation());
+			//assertThat(//		bundleT3.getLocation()).isCloseTo(//		"The location of the conf must be dynamically bound to bundleT3", within(conf.getBundleLocation()));
 
 			// TODO confirm the behavior when the MSF gets unvisible. Will
 			// deleted(pid) be called back ?
@@ -8492,11 +8344,11 @@ public class CMControl extends DefaultTestBundleControl {
 			//assertNoCallback(sync1_2, count1_2);
 			//int countDeleted2_1 = this.assertDeletedCallback(sync2_1, 0);
 			//count3_1 = assertCallback(sync3_1, count3_1);
-			//assertNotNull("called back with Non-null props", sync3_1.getProps());
+			//assertThat(sync3_1.getProps()).as("called back with Non-null props").isNotNull();
 			//count3_1 = assertCallback(sync3_2, count3_2);
-			//assertNotNull("called back with Non-null props", sync3_2.getProps());
+			//assertThat(sync3_2.getProps()).as("called back with Non-null props").isNotNull();
 
-			//trace("conf is going to be deleted.");
+			//System.out.println("conf is going to be deleted.");
 			//conf.delete();
 			//this.assertDeletedNoCallback(sync1_1, 0);
 			//this.assertDeletedNoCallback(sync1_2, 0);
@@ -8508,9 +8360,10 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_15_1_2()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8520,10 +8373,10 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 
 			this.resetPermissions();
@@ -8535,52 +8388,50 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1, null);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
-			assertEquals(
-					"The location of the conf must be dynamically bound to bundleT1",
-					bundleT1.getLocation(), conf.getBundleLocation());
+			assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically bound to bundleT1").isEqualTo(bundleT1.getLocation());
 
-			trace("Bound bundleT1 is going to be stopped.");
+			System.out.println("Bound bundleT1 is going to be stopped.");
 			bundleT1.stop();
 			bundleT1.uninstall();
-			sleep(1000);
-			assertNull(
-					"The location of the conf must be dynamically unbound to null.",
-					conf.getBundleLocation());
+			settle(1000);
+			assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically unbound to null.").isNull();
 		} finally {
 			cleanUpForCallbackTest(null, null, null, list);
 		}
 	}
 
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_15_2_1()
 			throws Exception {
 		// TODO impl
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleTargets_15_3_1()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
-		// final Bundle bundleT4 = getContext().installBundle(
+		// final Bundle bundleT4 = context.installBundle(
 		// getWebServer() + "bundleT4.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8590,20 +8441,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSyncF3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8617,44 +8468,45 @@ public class CMControl extends DefaultTestBundleControl {
 			int count3_1 = 0;
 			int count3_2 = 0;
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1, "?");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
 
 			this.startTargetBundle(bundleT1);
-			sleep(1000);
-			trace("Wait for signal.");
+			settle(1000);
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			this.startTargetBundle(bundleT2);
-			sleep(1000);
-			trace("Wait for signal.");
+			settle(1000);
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync2_1, count2_1);
 			this.startTargetBundle(bundleT3);
-			sleep(1000);
-			trace("Wait for signal.");
+			settle(1000);
+			System.out.println("Wait for signal.");
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNotNull("called back with Non-null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNotNull("called back with Non-null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with Non-null props").isNotNull();
 
 		} finally {
 			cleanUpForCallbackTest(bundleT1, bundleT2, bundleT3, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleCF_16_1_1()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8664,20 +8516,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSyncF3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8700,62 +8552,62 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configurations are being created");
+			System.out.println("The configurations are being created");
 			Configuration conf1 = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
 			Configuration conf2 = cm.createFactoryConfiguration(fpid1, "?");
 			Configuration conf3 = cm.createFactoryConfiguration(fpid1,
 					bundleT3.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The conf1 is being updated ");
+			System.out.println("The conf1 is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf1.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The conf2 is being updated ");
+			System.out.println("The conf2 is being updated ");
 			conf2.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			// count2_1 = assertCallback(sync2_1, count2_1);
-			// assertNotNull("called back with Non-null props",
-			// sync2_1.getProps());
+			// assertThat(// sync2_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The conf3 is being updated ");
+			System.out.println("The conf3 is being updated ");
 			conf3.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNotNull("called back with Non-null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNotNull("called back with Non-null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with Non-null props").isNotNull();
 		} finally {
 			cleanUpForCallbackTest(bundleT1, bundleT2, bundleT3, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryRegistrationMultipleCF_16_1_2()
 			throws Exception {
-		final Bundle bundleT1 = getContext().installBundle(
+		final Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
-		final Bundle bundleT2 = getContext().installBundle(
+		final Bundle bundleT2 = context.installBundle(
 				getWebServer() + "bundleT2.jar");
-		final Bundle bundleT3 = getContext().installBundle(
+		final Bundle bundleT3 = context.installBundle(
 				getWebServer() + "bundleT3.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(5);
@@ -8765,20 +8617,20 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 		try {
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 			SynchronizerImpl sync2_1 = new SynchronizerImpl("2-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync2_1, propsForSyncF2_1));
 
 			SynchronizerImpl sync3_1 = new SynchronizerImpl("3-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_1, propsForSyncF3_1));
 			SynchronizerImpl sync3_2 = new SynchronizerImpl("3-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync3_2, propsForSyncF3_2));
 
 			this.resetPermissions();
@@ -8801,57 +8653,58 @@ public class CMControl extends DefaultTestBundleControl {
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The configurations are being created");
+			System.out.println("The configurations are being created");
 			Configuration conf1 = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
 			Configuration conf2 = cm.createFactoryConfiguration(fpid1, "?");
 			Configuration conf3 = cm.createFactoryConfiguration(fpid1,
 					bundleT3.getLocation());
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The conf1 is being updated ");
+			System.out.println("The conf1 is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf1.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 			assertNoCallback(sync2_1, count2_1);
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The conf2 is being updated ");
+			System.out.println("The conf2 is being updated ");
 			conf2.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with Non-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
 			// assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 			count2_1 = assertCallback(sync2_1, count2_1);
-			assertNotNull("called back with Non-null props", sync2_1.getProps());
+			assertThat(sync2_1.getProps()).as("called back with Non-null props").isNotNull();
 			assertNoCallback(sync3_1, count3_1);
 			assertNoCallback(sync3_2, count3_2);
 
-			trace("The conf3 is being updated ");
+			System.out.println("The conf3 is being updated ");
 			conf3.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count3_1 = assertCallback(sync3_1, count3_1);
-			assertNotNull("called back with Non-null props", sync3_1.getProps());
+			assertThat(sync3_1.getProps()).as("called back with Non-null props").isNotNull();
 			count3_2 = assertCallback(sync3_2, count3_2);
-			assertNotNull("called back with Non-null props", sync3_2.getProps());
+			assertThat(sync3_2.getProps()).as("called back with Non-null props").isNotNull();
 		} finally {
 			cleanUpForCallbackTest(bundleT1, bundleT2, bundleT3, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryCmRestart18_3_2() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -8862,41 +8715,41 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					bundleT1.getLocation());
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
 
-			trace("CM Bundle is going to start.");
+			System.out.println("CM Bundle is going to start.");
 			Bundle cmBundle = stopCmBundle();
 
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("F1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("F1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 
 			int count1_1 = 0;
 			int count1_2 = 0;
 
-			trace("Bundle is going to start.");
+			System.out.println("Bundle is going to start.");
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("CM Bundle is going to start.");
+			System.out.println("CM Bundle is going to start.");
 			this.startTargetBundle(cmBundle);
 			assignCm();
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
 		} finally {
@@ -8904,8 +8757,9 @@ public class CMControl extends DefaultTestBundleControl {
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryModifyPid18_4_2() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		final String fpid2 = Util.createPid("factoryPid2");
@@ -8921,50 +8775,51 @@ public class CMControl extends DefaultTestBundleControl {
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("F1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("F1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 
 			int count1_1 = 0;
 			int count1_2 = 0;
 
-			trace("Bundle is going to start.");
+			System.out.println("Bundle is going to start.");
 			this.startTargetBundle(bundleT1);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1, "?");
 			// Configuration conf =
 			// cm.createFactoryConfiguration(fpid1,bundleT1.getLocation());
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
 			// modify PID
 			modifyPid(ManagedServiceFactory.class.getName(), fpid2, fpid1);
 
-			// ServiceReference[] references = this.getContext()
+			// ServiceReference[] references = this.context
 			// .getServiceReferences(
 			// ManagedServiceFactory.class.getName(), null);
 
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			assertNoCallback(sync1_1, count1_1);
 			count1_2 = assertCallback(sync1_2, count1_2);
-			assertNotNull("called back with NON-null props", sync1_2.getProps());
+			assertThat(sync1_2.getProps()).as("called back with NON-null props").isNotNull();
 
 		} finally {
 			this.cleanUpForCallbackTest(bundleT1, null, null, list);
 		}
 	}
 
+	@Test
 	public void testManagedServiceFactoryDeletion18_5_2() throws Exception {
-		Bundle bundleT1 = getContext().installBundle(
+		Bundle bundleT1 = context.installBundle(
 				getWebServer() + "bundleT1.jar");
 		final String fpid1 = Util.createPid("factoryPid1");
 		List<ServiceRegistration< ? >> list = new ArrayList<>(3);
@@ -8975,10 +8830,10 @@ public class CMControl extends DefaultTestBundleControl {
 		traceTestId(header, ++micro);
 
 		try {
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			Dictionary<String,Object> props = new Hashtable<>();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
@@ -8986,41 +8841,41 @@ public class CMControl extends DefaultTestBundleControl {
 			this.setCPtoBundle("*", "target", bundleT1, false);
 
 			SynchronizerImpl sync1_1 = new SynchronizerImpl("F1-1");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_1, propsForSyncF1_1));
 			SynchronizerImpl sync1_2 = new SynchronizerImpl("F1-2");
-			list.add(getContext().registerService(Synchronizer.class.getName(),
+			list.add(context.registerService(Synchronizer.class.getName(),
 					sync1_2, propsForSyncF1_2));
 
 			int count1_1 = 0;
 			int count1_2 = 0;
 
-			trace("Bundle is going to start.");
+			System.out.println("Bundle is going to start.");
 			this.startTargetBundle(bundleT1);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("The configuration is being deleted. Wait for signal.");
+			System.out.println("The configuration is being deleted. Wait for signal.");
 			conf.delete();
 
 			int countDeteted1_1 = this.assertDeletedCallback(sync1_1, 0);
 			this.assertDeletedNoCallback(sync1_2, 0);
 
-			trace("The configuration is being created");
+			System.out.println("The configuration is being created");
 			Configuration conf2 = cm.createFactoryConfiguration(fpid1,
 					"?RegionA");
-			trace("The configuration is being updated ");
+			System.out.println("The configuration is being updated ");
 			conf2.update(props);
-			trace("Wait for signal.");
+			System.out.println("Wait for signal.");
 			count1_1 = assertCallback(sync1_1, count1_1);
-			assertNotNull("called back with NON-null props", sync1_1.getProps());
+			assertThat(sync1_1.getProps()).as("called back with NON-null props").isNotNull();
 			assertNoCallback(sync1_2, count1_2);
 
-			trace("Change permission of bundleT1 ");
+			System.out.println("Change permission of bundleT1 ");
 			this.setCPtoBundle(null, null, bundleT1, false);
-			trace("The configuration is being deleted. Wait for signal.");
+			System.out.println("The configuration is being deleted. Wait for signal.");
 			conf2.delete();
 			this.assertDeletedNoCallback(sync1_1, countDeteted1_1);
 			this.assertDeletedNoCallback(sync1_2, 0);
@@ -9033,6 +8888,7 @@ public class CMControl extends DefaultTestBundleControl {
 	 * Configuration attributes - locking
 	 * @since 1.6
 	 */
+	@Test
 	public void testConfigurationLocking() throws Exception {
 		final String pid = Util.createPid("locking");
 		final List<ConfigurationEvent> events = new ArrayList<>();
@@ -9082,56 +8938,57 @@ public class CMControl extends DefaultTestBundleControl {
 			final Hashtable<String,Object> newprops = new Hashtable<String,Object>();
 			newprops.put("somekey", "somevalue");
 			conf.update(newprops);
-			assertEquals(startLevel + 1, conf.getChangeCount());
-			assertEquals(1, events.size());
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 1);
+			assertThat(events).hasSize(1);
 
 			// wait for managed service
 			barrier.await();
 			barrier.reset();
 
 			// check attributes
-			assertTrue(conf.getAttributes().isEmpty());
+			assertThat(conf.getAttributes().isEmpty()).isTrue();
 			
 			// lock configuration
 			conf.addAttributes(Configuration.ConfigurationAttribute.READ_ONLY);
-			assertEquals(1, conf.getAttributes().size());
-			assertTrue(conf.getAttributes().contains(Configuration.ConfigurationAttribute.READ_ONLY));
+			assertThat(conf.getAttributes().size()).isEqualTo(1);
+			assertThat(conf.getAttributes().contains(Configuration.ConfigurationAttribute.READ_ONLY)).isTrue();
 
 			// try to update
 			try {
 				conf.update(newprops);
-				fail();
+				fail("");
 			} catch ( final ReadOnlyConfigurationException e) {
 				// expected
 			}
 			// nothing should have changed
-			assertEquals(startLevel + 1, conf.getChangeCount());
-			assertEquals(1, events.size());
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 1);
+			assertThat(events.size()).isEqualTo(1);
 
             // unlock
 			conf.removeAttributes(Configuration.ConfigurationAttribute.READ_ONLY);
-			assertTrue(conf.getAttributes().isEmpty());
+			assertThat(conf.getAttributes().isEmpty()).isTrue();
 			
             // try update 
 			conf.update(newprops);
-			assertEquals(startLevel + 2, conf.getChangeCount());
-			assertEquals(2, events.size());
+			assertThat(conf.getChangeCount()).isEqualTo(startLevel + 2);
+			assertThat(events).hasSize(2);
 			
 			// check updates to managed service
 			barrier.await();
 
-			assertNull(updates.get(0));
-			assertNotNull(updates.get(1));
-			assertNotNull(updates.get(2));
+			assertThat(updates.get(0)).isNull();
+			assertThat(updates.get(1)).isNotNull();
+			assertThat(updates.get(2)).isNotNull();
 		} finally {
 			this.unregisterService(listener);
 			this.unregisterService(ms);
 		}		
 	}
 
+	@Test
 	public void testProvideImplementationCapability() throws Exception {
 	    // get the bundle revision for the CA bundle by obtaining the CA service
-		final ServiceReference<ConfigurationAdmin> srA = getContext().getServiceReference(ConfigurationAdmin.class);
+		final ServiceReference<ConfigurationAdmin> srA = context.getServiceReference(ConfigurationAdmin.class);
 		final BundleRevision rev = srA.getBundle().adapt(BundleRevision.class);
 
 		final List<Capability> capabilities = rev.getCapabilities(ImplementationNamespace.IMPLEMENTATION_NAMESPACE);
@@ -9149,19 +9006,20 @@ public class CMControl extends DefaultTestBundleControl {
     				final Map<String, String> directives = capability.getDirectives();
 	    			final List<String> packages = Arrays.asList(directives.get("uses").split(","));
 
-					assertTrue(packages.contains("org.osgi.service.cm"));
+					assertThat(packages.contains("org.osgi.service.cm")).isTrue();
 
 					found = true;
 				}
 			}
 		}
 
-		assertTrue(found);
+		assertThat(found).isTrue();
 	}
 
+	@Test
 	public void testProvideServiceCapability() throws Exception {
 	    // get the bundle revision for the CA bundle by obtaining the CA service
-		final ServiceReference<ConfigurationAdmin> srA = getContext().getServiceReference(ConfigurationAdmin.class);
+		final ServiceReference<ConfigurationAdmin> srA = context.getServiceReference(ConfigurationAdmin.class);
 		final BundleRevision rev = srA.getBundle().adapt(BundleRevision.class);
 		final List<Capability> capabilities = rev.getCapabilities(ServiceNamespace.SERVICE_NAMESPACE);
 
@@ -9176,12 +9034,12 @@ public class CMControl extends DefaultTestBundleControl {
 				final Map<String, String> directives = capability.getDirectives();
 				final List<String> packages = Arrays.asList(directives.get("uses").split(","));
 
-				assertTrue(packages.contains("org.osgi.service.cm"));
+				assertThat(packages.contains("org.osgi.service.cm")).isTrue();
 
 				found = true;
 			}
 		}
 
-		assertTrue(found);
+		assertThat(found).isTrue();
 	}
 }

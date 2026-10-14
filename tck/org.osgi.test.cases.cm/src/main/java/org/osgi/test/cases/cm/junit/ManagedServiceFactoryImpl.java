@@ -47,7 +47,7 @@ public class ManagedServiceFactoryImpl implements ManagedServiceFactory {
 			Dictionary<String, ? > properties)
 			throws ConfigurationException {
 		try {
-			CMControl.log("+++ updating " + pid);
+			System.out.println("+++ updating " + pid);
 			String data = "somedata";
 			/*
 			 * String data = (String) properties.get(propertyName);
@@ -68,7 +68,7 @@ public class ManagedServiceFactoryImpl implements ManagedServiceFactory {
 		catch (Throwable e) {
 			e.printStackTrace();
 		}
-		CMControl.log("--- done updating " + pid);
+		System.out.println("--- done updating " + pid);
 	}
 
 	public synchronized void deleted(java.lang.String pid) {

@@ -18,15 +18,19 @@
 
 package org.osgi.test.cases.cm.junit;
 
+import static org.assertj.core.api.Assertions.fail;
+import static org.osgi.test.assertj.permission.PermissionAssertions.assertThat;
+
 import java.security.Permission;
 import java.security.PermissionCollection;
 import java.util.PropertyPermission;
 
+import org.junit.jupiter.api.Test;
 import org.osgi.service.cm.ConfigurationPermission;
-import org.osgi.test.support.PermissionTestCase;
 
-public class ConfigurationPermissionTests extends PermissionTestCase {
+public class ConfigurationPermissionTests {
 
+	@Test
 	public void testInvalid() {
 		invalidConfigurationPermission("a/b/c", "x");
 		invalidConfigurationPermission("a/b/c", "   configure  ,  x   ");
@@ -54,6 +58,7 @@ public class ConfigurationPermissionTests extends PermissionTestCase {
 		invalidConfigurationPermission("", "   target");
 	}
 
+	@Test
 	public void testActions() {
 		Permission op = new PropertyPermission("java.home", "read"); 
 
@@ -74,150 +79,151 @@ public class ConfigurationPermissionTests extends PermissionTestCase {
 		ConfigurationPermission p15 = new ConfigurationPermission(
 				"com/foo/service1", " aTTribute ");
 
-		assertImplies(p10, p10);
-		assertImplies(p10, p11);
-		assertImplies(p10, p12);
-		assertImplies(p10, p13);
-		assertImplies(p10, p14);
-		assertImplies(p10, p15);
+		assertThat(p10).implies(p10);
+		assertThat(p10).implies(p11);
+		assertThat(p10).implies(p12);
+		assertThat(p10).implies(p13);
+		assertThat(p10).implies(p14);
+		assertThat(p10).implies(p15);
 
-		assertImplies(p11, p11);
-		assertImplies(p11, p12);
-		assertImplies(p11, p13);
-		assertImplies(p11, p14);
+		assertThat(p11).implies(p11);
+		assertThat(p11).implies(p12);
+		assertThat(p11).implies(p13);
+		assertThat(p11).implies(p14);
 
-		assertImplies(p12, p11);
-		assertImplies(p12, p12);
-		assertImplies(p12, p13);
-		assertImplies(p12, p14);
+		assertThat(p12).implies(p11);
+		assertThat(p12).implies(p12);
+		assertThat(p12).implies(p13);
+		assertThat(p12).implies(p14);
 
-		assertImplies(p13, p13);
-		assertImplies(p14, p14);
+		assertThat(p13).implies(p13);
+		assertThat(p14).implies(p14);
 
-		assertNotImplies(p13, p10);
-		assertNotImplies(p13, p11);
-		assertNotImplies(p13, p14);
-		assertNotImplies(p13, p15);
+		assertThat(p13).doesNotImply(p10);
+		assertThat(p13).doesNotImply(p11);
+		assertThat(p13).doesNotImply(p14);
+		assertThat(p13).doesNotImply(p15);
 
-		assertNotImplies(p14, p10);
-		assertNotImplies(p14, p11);
-		assertNotImplies(p14, p13);
-		assertNotImplies(p14, p15);
+		assertThat(p14).doesNotImply(p10);
+		assertThat(p14).doesNotImply(p11);
+		assertThat(p14).doesNotImply(p13);
+		assertThat(p14).doesNotImply(p15);
 
-		assertNotImplies(p15, p10);
-		assertNotImplies(p15, p11);
-		assertNotImplies(p15, p13);
-		assertNotImplies(p15, p14);
+		assertThat(p15).doesNotImply(p10);
+		assertThat(p15).doesNotImply(p11);
+		assertThat(p15).doesNotImply(p13);
+		assertThat(p15).doesNotImply(p14);
 
-		assertNotImplies(p11, op);
+		assertThat(p11).doesNotImply(op);
 
-		assertEquals(p10, p10);
-		assertEquals(p11, p11);
-		assertEquals(p11, p12);
-		assertEquals(p12, p11);
-		assertEquals(p12, p12);
-		assertEquals(p13, p13);
-		assertEquals(p14, p14);
+		assertThat(p10).isEquivalentTo(p10);
+		assertThat(p11).isEquivalentTo(p11);
+		assertThat(p11).isEquivalentTo(p12);
+		assertThat(p12).isEquivalentTo(p11);
+		assertThat(p12).isEquivalentTo(p12);
+		assertThat(p13).isEquivalentTo(p13);
+		assertThat(p14).isEquivalentTo(p14);
 
-		assertNotEquals(p10, p11);
-		assertNotEquals(p10, p12);
-		assertNotEquals(p10, p13);
-		assertNotEquals(p10, p14);
-		assertNotEquals(p10, p15);
-		assertNotEquals(p11, p10);
-		assertNotEquals(p11, p13);
-		assertNotEquals(p11, p14);
-		assertNotEquals(p11, p15);
-		assertNotEquals(p12, p10);
-		assertNotEquals(p12, p13);
-		assertNotEquals(p12, p14);
-		assertNotEquals(p12, p15);
-		assertNotEquals(p13, p10);
-		assertNotEquals(p13, p11);
-		assertNotEquals(p13, p12);
-		assertNotEquals(p13, p14);
-		assertNotEquals(p13, p15);
-		assertNotEquals(p14, p10);
-		assertNotEquals(p14, p11);
-		assertNotEquals(p14, p12);
-		assertNotEquals(p14, p13);
-		assertNotEquals(p14, p15);
-		assertNotEquals(p15, p10);
-		assertNotEquals(p15, p11);
-		assertNotEquals(p15, p12);
-		assertNotEquals(p15, p13);
-		assertNotEquals(p15, p14);
+		assertThat(p10).isNotEquivalentTo(p11);
+		assertThat(p10).isNotEquivalentTo(p12);
+		assertThat(p10).isNotEquivalentTo(p13);
+		assertThat(p10).isNotEquivalentTo(p14);
+		assertThat(p10).isNotEquivalentTo(p15);
+		assertThat(p11).isNotEquivalentTo(p10);
+		assertThat(p11).isNotEquivalentTo(p13);
+		assertThat(p11).isNotEquivalentTo(p14);
+		assertThat(p11).isNotEquivalentTo(p15);
+		assertThat(p12).isNotEquivalentTo(p10);
+		assertThat(p12).isNotEquivalentTo(p13);
+		assertThat(p12).isNotEquivalentTo(p14);
+		assertThat(p12).isNotEquivalentTo(p15);
+		assertThat(p13).isNotEquivalentTo(p10);
+		assertThat(p13).isNotEquivalentTo(p11);
+		assertThat(p13).isNotEquivalentTo(p12);
+		assertThat(p13).isNotEquivalentTo(p14);
+		assertThat(p13).isNotEquivalentTo(p15);
+		assertThat(p14).isNotEquivalentTo(p10);
+		assertThat(p14).isNotEquivalentTo(p11);
+		assertThat(p14).isNotEquivalentTo(p12);
+		assertThat(p14).isNotEquivalentTo(p13);
+		assertThat(p14).isNotEquivalentTo(p15);
+		assertThat(p15).isNotEquivalentTo(p10);
+		assertThat(p15).isNotEquivalentTo(p11);
+		assertThat(p15).isNotEquivalentTo(p12);
+		assertThat(p15).isNotEquivalentTo(p13);
+		assertThat(p15).isNotEquivalentTo(p14);
 
 		PermissionCollection pc = p13.newPermissionCollection();
 
-		checkEnumeration(pc.elements(), true);
+		assertThat(pc).hasNoElements();
 
-		assertNotImplies(pc, p10);
+		assertThat(pc).doesNotImply(p10);
 
-		assertAddPermission(pc, p14);
-		assertImplies(pc, p14);
-		assertNotImplies(pc, p10);
-		assertNotImplies(pc, p11);
-		assertNotImplies(pc, p12);
-		assertNotImplies(pc, p13);
-		assertNotImplies(pc, p15);
+		assertThat(pc).accepts(p14);
+		assertThat(pc).implies(p14);
+		assertThat(pc).doesNotImply(p10);
+		assertThat(pc).doesNotImply(p11);
+		assertThat(pc).doesNotImply(p12);
+		assertThat(pc).doesNotImply(p13);
+		assertThat(pc).doesNotImply(p15);
 
-		assertAddPermission(pc, p13);
-		assertNotImplies(pc, p10);
-		assertImplies(pc, p11);
-		assertImplies(pc, p12);
-		assertImplies(pc, p13);
-		assertImplies(pc, p14);
-		assertNotImplies(pc, p15);
+		assertThat(pc).accepts(p13);
+		assertThat(pc).doesNotImply(p10);
+		assertThat(pc).implies(p11);
+		assertThat(pc).implies(p12);
+		assertThat(pc).implies(p13);
+		assertThat(pc).implies(p14);
+		assertThat(pc).doesNotImply(p15);
 
-		assertAddPermission(pc, p15);
-		assertImplies(pc, p10);
-		assertImplies(pc, p11);
-		assertImplies(pc, p12);
-		assertImplies(pc, p13);
-		assertImplies(pc, p14);
-		assertImplies(pc, p15);
+		assertThat(pc).accepts(p15);
+		assertThat(pc).implies(p10);
+		assertThat(pc).implies(p11);
+		assertThat(pc).implies(p12);
+		assertThat(pc).implies(p13);
+		assertThat(pc).implies(p14);
+		assertThat(pc).implies(p15);
 
-		assertNotAddPermission(pc, op);
+		assertThat(pc).rejects(op);
 
 		pc = p13.newPermissionCollection();
 
-		assertAddPermission(pc, p13);
-		assertImplies(pc, p13);
-		assertNotImplies(pc, p11);
-		assertNotImplies(pc, p12);
-		assertNotImplies(pc, p14);
+		assertThat(pc).accepts(p13);
+		assertThat(pc).implies(p13);
+		assertThat(pc).doesNotImply(p11);
+		assertThat(pc).doesNotImply(p12);
+		assertThat(pc).doesNotImply(p14);
 
-		assertAddPermission(pc, p14);
-		assertImplies(pc, p11);
-		assertImplies(pc, p12);
-		assertImplies(pc, p13);
-		assertImplies(pc, p14);
+		assertThat(pc).accepts(p14);
+		assertThat(pc).implies(p11);
+		assertThat(pc).implies(p12);
+		assertThat(pc).implies(p13);
+		assertThat(pc).implies(p14);
 
 		pc = p10.newPermissionCollection();
 
-		assertAddPermission(pc, p10);
-		assertImplies(pc, p10);
-		assertImplies(pc, p11);
-		assertImplies(pc, p12);
-		assertImplies(pc, p13);
-		assertImplies(pc, p14);
-		assertImplies(pc, p15);
+		assertThat(pc).accepts(p10);
+		assertThat(pc).implies(p10);
+		assertThat(pc).implies(p11);
+		assertThat(pc).implies(p12);
+		assertThat(pc).implies(p13);
+		assertThat(pc).implies(p14);
+		assertThat(pc).implies(p15);
 
 		pc.setReadOnly();
 
-		assertNotAddPermission(pc, p12);
+		assertThat(pc).rejects(p12);
 
-		checkEnumeration(pc.elements(), false);
+		assertThat(pc).hasElements();
 
-		assertSerializable(p10);
-		assertSerializable(p11);
-		assertSerializable(p12);
-		assertSerializable(p13);
-		assertSerializable(p14);
-		assertSerializable(p15);
+		assertThat(p10).isSerializable();
+		assertThat(p11).isSerializable();
+		assertThat(p12).isSerializable();
+		assertThat(p13).isSerializable();
+		assertThat(p14).isSerializable();
+		assertThat(p15).isSerializable();
 	}
 
+	@Test
 	public void testNames() {
 		ConfigurationPermission p21 = new ConfigurationPermission(
 				"com/foo/service2",
@@ -229,88 +235,89 @@ public class ConfigurationPermissionTests extends PermissionTestCase {
 		ConfigurationPermission p24 = new ConfigurationPermission("*",
 				"configure");
 
-		assertImplies(p21, p21);
-		assertImplies(p22, p21);
-		assertImplies(p23, p21);
-		assertImplies(p24, p21);
+		assertThat(p21).implies(p21);
+		assertThat(p22).implies(p21);
+		assertThat(p23).implies(p21);
+		assertThat(p24).implies(p21);
 
-		assertImplies(p22, p22);
-		assertImplies(p23, p22);
-		assertImplies(p24, p22);
+		assertThat(p22).implies(p22);
+		assertThat(p23).implies(p22);
+		assertThat(p24).implies(p22);
 
-		assertImplies(p23, p23);
-		assertImplies(p24, p23);
+		assertThat(p23).implies(p23);
+		assertThat(p24).implies(p23);
 
-		assertImplies(p24, p24);
+		assertThat(p24).implies(p24);
 
-		assertNotImplies(p21, p22);
-		assertNotImplies(p21, p23);
-		assertNotImplies(p21, p24);
+		assertThat(p21).doesNotImply(p22);
+		assertThat(p21).doesNotImply(p23);
+		assertThat(p21).doesNotImply(p24);
 
-		assertNotImplies(p22, p23);
-		assertNotImplies(p22, p24);
+		assertThat(p22).doesNotImply(p23);
+		assertThat(p22).doesNotImply(p24);
 
-		assertNotImplies(p23, p24);
+		assertThat(p23).doesNotImply(p24);
 
 		PermissionCollection pc = p21.newPermissionCollection();
 
-		assertAddPermission(pc, p21);
-		assertImplies(pc, p21);
-		assertNotImplies(pc, p22);
-		assertNotImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p21);
+		assertThat(pc).implies(p21);
+		assertThat(pc).doesNotImply(p22);
+		assertThat(pc).doesNotImply(p23);
+		assertThat(pc).doesNotImply(p24);
 
-		assertAddPermission(pc, p22);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertNotImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p22);
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).doesNotImply(p23);
+		assertThat(pc).doesNotImply(p24);
 
-		assertAddPermission(pc, p23);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p23);
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).doesNotImply(p24);
 
-		assertAddPermission(pc, p24);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertImplies(pc, p24);
+		assertThat(pc).accepts(p24);
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).implies(p24);
 
 		pc = p22.newPermissionCollection();
 
-		assertAddPermission(pc, p22);
-		assertSerializable(pc);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertNotImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p22);
+		assertThat(pc).isSerializable();
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).doesNotImply(p23);
+		assertThat(pc).doesNotImply(p24);
 
 		pc = p23.newPermissionCollection();
 
-		assertAddPermission(pc, p23);
-		assertSerializable(pc);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p23);
+		assertThat(pc).isSerializable();
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).doesNotImply(p24);
 
 		pc = p24.newPermissionCollection();
 
-		assertAddPermission(pc, p24);
-		assertSerializable(pc);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertImplies(pc, p24);
+		assertThat(pc).accepts(p24);
+		assertThat(pc).isSerializable();
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).implies(p24);
 
-		assertSerializable(p21);
-		assertSerializable(p22);
-		assertSerializable(p23);
-		assertSerializable(p24);
+		assertThat(p21).isSerializable();
+		assertThat(p22).isSerializable();
+		assertThat(p23).isSerializable();
+		assertThat(p24).isSerializable();
 	}
 	
+	@Test
 	public void testWildcardNames() {
 		ConfigurationPermission p21 = new ConfigurationPermission(
 				"com/foo/service2", "configure");
@@ -321,85 +328,86 @@ public class ConfigurationPermissionTests extends PermissionTestCase {
 		ConfigurationPermission p24 = new ConfigurationPermission("*/service2",
 				"configure");
 
-		assertImplies(p21, p21);
-		assertImplies(p22, p21);
-		assertImplies(p23, p21);
-		assertImplies(p24, p21);
+		assertThat(p21).implies(p21);
+		assertThat(p22).implies(p21);
+		assertThat(p23).implies(p21);
+		assertThat(p24).implies(p21);
 
-		assertImplies(p22, p22);
-		assertNotImplies(p23, p22);
-		assertNotImplies(p24, p22);
+		assertThat(p22).implies(p22);
+		assertThat(p23).doesNotImply(p22);
+		assertThat(p24).doesNotImply(p22);
 
-		assertImplies(p23, p23);
-		assertImplies(p24, p23);
+		assertThat(p23).implies(p23);
+		assertThat(p24).implies(p23);
 
-		assertImplies(p24, p24);
+		assertThat(p24).implies(p24);
 
-		assertNotImplies(p21, p22);
-		assertNotImplies(p21, p23);
-		assertNotImplies(p21, p24);
+		assertThat(p21).doesNotImply(p22);
+		assertThat(p21).doesNotImply(p23);
+		assertThat(p21).doesNotImply(p24);
 
-		assertNotImplies(p22, p23);
-		assertNotImplies(p22, p24);
+		assertThat(p22).doesNotImply(p23);
+		assertThat(p22).doesNotImply(p24);
 
-		assertNotImplies(p23, p24);
+		assertThat(p23).doesNotImply(p24);
 
 		PermissionCollection pc = p21.newPermissionCollection();
 
-		assertAddPermission(pc, p21);
-		assertImplies(pc, p21);
-		assertNotImplies(pc, p22);
-		assertNotImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p21);
+		assertThat(pc).implies(p21);
+		assertThat(pc).doesNotImply(p22);
+		assertThat(pc).doesNotImply(p23);
+		assertThat(pc).doesNotImply(p24);
 
-		assertAddPermission(pc, p22);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertNotImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p22);
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).doesNotImply(p23);
+		assertThat(pc).doesNotImply(p24);
 
-		assertAddPermission(pc, p23);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p23);
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).doesNotImply(p24);
 
-		assertAddPermission(pc, p24);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertImplies(pc, p24);
+		assertThat(pc).accepts(p24);
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).implies(p24);
 
 		pc = p22.newPermissionCollection();
 
-		assertAddPermission(pc, p22);
-		assertImplies(pc, p21);
-		assertImplies(pc, p22);
-		assertNotImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p22);
+		assertThat(pc).implies(p21);
+		assertThat(pc).implies(p22);
+		assertThat(pc).doesNotImply(p23);
+		assertThat(pc).doesNotImply(p24);
 
 		pc = p23.newPermissionCollection();
 
-		assertAddPermission(pc, p23);
-		assertImplies(pc, p21);
-		assertNotImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertNotImplies(pc, p24);
+		assertThat(pc).accepts(p23);
+		assertThat(pc).implies(p21);
+		assertThat(pc).doesNotImply(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).doesNotImply(p24);
 
 		pc = p24.newPermissionCollection();
 
-		assertAddPermission(pc, p24);
-		assertImplies(pc, p21);
-		assertNotImplies(pc, p22);
-		assertImplies(pc, p23);
-		assertImplies(pc, p24);
+		assertThat(pc).accepts(p24);
+		assertThat(pc).implies(p21);
+		assertThat(pc).doesNotImply(p22);
+		assertThat(pc).implies(p23);
+		assertThat(pc).implies(p24);
 
-		assertSerializable(p21);
-		assertSerializable(p22);
-		assertSerializable(p23);
-		assertSerializable(p24);
+		assertThat(p21).isSerializable();
+		assertThat(p22).isSerializable();
+		assertThat(p23).isSerializable();
+		assertThat(p24).isSerializable();
 	}
 
+	@Test
 	public void testActionImplications() {
 		ConfigurationPermission target = new ConfigurationPermission("*",
 				"target");
@@ -408,17 +416,17 @@ public class ConfigurationPermissionTests extends PermissionTestCase {
 		ConfigurationPermission attribute = new ConfigurationPermission("*",
 				"attribute");
 
-		assertImplies(target, target);
-		assertNotImplies(target, configure);
-		assertNotImplies(target, attribute);
+		assertThat(target).implies(target);
+		assertThat(target).doesNotImply(configure);
+		assertThat(target).doesNotImply(attribute);
 
-		assertNotImplies(configure, target);
-		assertImplies(configure, configure);
-		assertNotImplies(configure, attribute);
+		assertThat(configure).doesNotImply(target);
+		assertThat(configure).implies(configure);
+		assertThat(configure).doesNotImply(attribute);
 
-		assertNotImplies(attribute, target);
-		assertNotImplies(attribute, configure);
-		assertImplies(attribute, attribute);
+		assertThat(attribute).doesNotImply(target);
+		assertThat(attribute).doesNotImply(configure);
+		assertThat(attribute).implies(attribute);
 	}
 
 	private void invalidConfigurationPermission(String name, String actions) {
