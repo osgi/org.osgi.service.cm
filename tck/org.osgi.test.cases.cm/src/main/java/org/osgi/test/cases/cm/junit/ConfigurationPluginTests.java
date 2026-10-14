@@ -17,6 +17,9 @@
  *******************************************************************************/
 package org.osgi.test.cases.cm.junit;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Dictionary;
@@ -26,7 +29,11 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Set;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.Constants;
 import org.osgi.framework.ServiceReference;
@@ -43,12 +50,12 @@ import org.osgi.test.cases.cm.common.ConfigurationListenerImpl;
 import org.osgi.test.cases.cm.common.SynchronizerImpl;
 import org.osgi.test.cases.cm.shared.Synchronizer;
 import org.osgi.test.cases.cm.shared.Util;
-import org.osgi.test.support.compatibility.DefaultTestBundleControl;
 
 /**
  * Tests related to {@link ConfigurationPlugin}
  */
-public class ConfigurationPluginTests extends DefaultTestBundleControl {
+public class ConfigurationPluginTests extends CMTestSupport {
+
 
 	private static final String	PROP_MS_PREFIX	= "plugin.ms.";
 
@@ -64,7 +71,8 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	/** PIDs of configurations existing before the test. */
 	private Set<String>								existingConfigs;
 
-	protected void setUp() throws Exception {
+	@BeforeEach
+	public void setUp() throws Exception {
 		SIGNAL_WAITING_TIME = getLongProperty(
 				"org.osgi.test.cases.cm.signal_waiting_time", 4000);
 
@@ -72,7 +80,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 
 		if (System.getSecurityManager() != null) {
 			permAdmin = getService(PermissionAdmin.class);
-			setAllPermissionBundle = getContext().installBundle(
+			setAllPermissionBundle = context.installBundle(
 					getWebServer() + "setallpermission.jar");
 		}
 
@@ -87,7 +95,8 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
         }
 	}
 
-	protected void tearDown() throws Exception {
+	@AfterEach
+	public void tearDown() throws Exception {
 		resetPermissions();
 		cleanCM(existingConfigs);
 
@@ -100,7 +109,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 			return;
 		try {
 			if (this.setAllPermissionBundle == null)
-				this.setAllPermissionBundle = getContext().installBundle(
+				this.setAllPermissionBundle = context.installBundle(
 						getWebServer() + "setallpermission.jar");
 			this.setAllPermissionBundle.start();
 			this.setAllPermissionBundle.stop();
@@ -123,6 +132,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	 *       Dictionary)
 	 * @throws Exception if an error occurs or an assertion fails in the test.
 	 */
+	@Test
 	public void testConfigurationPluginService() throws Exception {
 		// create configuration
 		String pid = Util
@@ -130,20 +140,19 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		Configuration conf = cm.getConfiguration(pid);
 
 		SynchronizerImpl synchronizer = new SynchronizerImpl();
-		trace("Create and register a new ConfigurationListener");
+		System.out.println("Create and register a new ConfigurationListener");
 		createConfigurationListener(synchronizer);
-		trace("Create and register a new ConfigurationPlugin");
+		System.out.println("Create and register a new ConfigurationPlugin");
 		NotVisitablePlugin plugin = createConfigurationPlugin();
 
 		// update configuration
 		Dictionary<String,Object> props = Util.singletonDictionary("key",
 				"value1");
 		conf.update(props);
-		trace("Wait until the ConfigurationListener has gotten the update");
+		System.out.println("Wait until the ConfigurationListener has gotten the update");
 
-		assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-		assertTrue("ConfigurationPlugin not visited", plugin.notVisited());
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+		assertThat(plugin.notVisited()).as("ConfigurationPlugin not visited").isTrue();
 	}
 
 	/**
@@ -160,6 +169,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	 * @throws Exception
 	 *             if an error occurs or an assertion fails in the test.
 	 */
+	@Test
 	public void testConfigurationPluginServiceFactory() throws Exception {
 
 		// create configuration
@@ -168,19 +178,18 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		Configuration conf = cm.createFactoryConfiguration(factorypid);
 
 		SynchronizerImpl synchronizer = new SynchronizerImpl();
-		trace("Create and register a new ConfigurationListener");
+		System.out.println("Create and register a new ConfigurationListener");
 		createConfigurationListener(synchronizer);
-		trace("Create and register a new ConfigurationPlugin");
+		System.out.println("Create and register a new ConfigurationPlugin");
 		NotVisitablePlugin plugin = createConfigurationPlugin();
 
 		Dictionary<String,Object> props = Util.singletonDictionary("key",
 				"value1");
 		conf.update(props);
-		trace("Wait until the ConfigurationListener has gotten the update");
+		System.out.println("Wait until the ConfigurationListener has gotten the update");
 
-		assertTrue("Update done",
-					synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-		assertTrue("ConfigurationPlugin not visited", plugin.notVisited());
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+		assertThat(plugin.notVisited()).as("ConfigurationPlugin not visited").isTrue();
 	}
 
 	/**
@@ -193,6 +202,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	 * <li>modifications wrt ranking
 	 * </ul>
 	 */
+	@Test
 	public void testRankingForManagedService() throws Exception {
 		// create configuration
 		final String pid = Util.createPid("mspid");
@@ -210,12 +220,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 
 		registerManagedService(pid, synchronizer);
 
-		trace("Wait until the ManagedService has gotten the update");
+		System.out.println("Wait until the ManagedService has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props = synchronizer.getProps();
-		assertEquals("val", props.get("key"));
+		assertThat(props.get("key")).isEqualTo("val");
 		verifyPlugins(props, false, Arrays.asList(1, 2, 3, 4, 5),
 				Arrays.asList(2, 3, 4), context);
 
@@ -224,12 +233,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		synchronizer.resetCount();
 		cm.getConfiguration(pid)
 				.update(Util.singletonDictionary("key1", "val1"));
-		trace("Wait until the ManagedService has gotten the update");
+		System.out.println("Wait until the ManagedService has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props1 = synchronizer.getProps();
-		assertEquals("val1", props1.get("key1"));
+		assertThat(props1.get("key1")).isEqualTo("val1");
 		verifyPlugins(props1, false, Arrays.asList(1, 2, 3, 4, 5),
 				Arrays.asList(2, 3, 4), context);
 
@@ -238,12 +246,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		synchronizer.resetCount();
 		cm.getConfiguration(pid)
 				.update(Util.singletonDictionary("key1", "val1"));
-		trace("Wait until the ManagedService has gotten the update");
+		System.out.println("Wait until the ManagedService has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props2 = synchronizer.getProps();
-		assertEquals("val1", props2.get("key1"));
+		assertThat(props2.get("key1")).isEqualTo("val1");
 		verifyPlugins(props2, false, Arrays.asList(1, 2, 3, 4, 5),
 				Arrays.asList(2, 3, 4), context);
 
@@ -251,13 +258,12 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		context.invocationOrder.clear();
 		synchronizer.resetCount();
 		cm.getConfiguration(pid).delete();
-		trace("Wait until the ManagedService has gotten the delete");
+		System.out.println("Wait until the ManagedService has gotten the delete");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-		assertNull(synchronizer.getProps());
-		assertTrue(context.invocationOrder.isEmpty());
-		assertTrue(context.errors.isEmpty());
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+		assertThat(synchronizer.getProps()).isNull();
+		assertThat(context.invocationOrder.isEmpty()).isTrue();
+		assertThat(context.errors.isEmpty()).isTrue();
 	}
 
 	/**
@@ -270,6 +276,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	 * <li>modifications wrt ranking
 	 * </ul>
 	 */
+	@Test
 	public void testRankingForManagedServiceFactory() throws Exception {
 		// create configuration
 		final String pid = Util.createPid("msfpid");
@@ -288,12 +295,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 
 		registerManagedServiceFactory(pid, synchronizer);
 
-		trace("Wait until the ManagedServiceFactory has gotten the update");
+		System.out.println("Wait until the ManagedServiceFactory has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props = synchronizer.getProps();
-		assertEquals("val", props.get("key"));
+		assertThat(props.get("key")).isEqualTo("val");
 
 		verifyPlugins(props, true, Arrays.asList(1, 2, 3, 4, 5),
 				Arrays.asList(2, 3, 4), context);
@@ -302,12 +308,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		context.invocationOrder.clear();
 		synchronizer.resetCount();
 		conf.update(Util.singletonDictionary("key1", "val1"));
-		trace("Wait until the ManagedServiceFactory has gotten the update");
+		System.out.println("Wait until the ManagedServiceFactory has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props1 = synchronizer.getProps();
-		assertEquals("val1", props1.get("key1"));
+		assertThat(props1.get("key1")).isEqualTo("val1");
 		verifyPlugins(props1, true, Arrays.asList(1, 2, 3, 4, 5),
 				Arrays.asList(2, 3, 4), context);
 
@@ -315,12 +320,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		context.invocationOrder.clear();
 		synchronizer.resetCount();
 		conf.update();
-		trace("Wait until the ManagedServiceFactory has gotten the update");
+		System.out.println("Wait until the ManagedServiceFactory has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props2 = synchronizer.getProps();
-		assertEquals("val1", props2.get("key1"));
+		assertThat(props2.get("key1")).isEqualTo("val1");
 		verifyPlugins(props2, true, Arrays.asList(1, 2, 3, 4, 5),
 				Arrays.asList(2, 3, 4), context);
 
@@ -328,18 +332,18 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		context.invocationOrder.clear();
 		synchronizer.resetCount();
 		conf.delete();
-		trace("Wait until the ManagedServiceFactory has gotten the delete");
+		System.out.println("Wait until the ManagedServiceFactory has gotten the delete");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
-		assertNull(synchronizer.getProps());
-		assertTrue(context.invocationOrder.isEmpty());
-		assertTrue(context.errors.isEmpty());
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
+		assertThat(synchronizer.getProps()).isNull();
+		assertThat(context.invocationOrder.isEmpty()).isTrue();
+		assertThat(context.errors.isEmpty()).isTrue();
 	}
 
 	/**
 	 * Test targetting of configuration plugins with a managed service
 	 */
+	@Test
 	public void testTargettingManagedService() throws Exception {
 		// create configuration
 		final String pid = Util.createPid("mspid");
@@ -354,12 +358,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		final SynchronizerImpl synchronizer = new SynchronizerImpl();
 		registerManagedService(pid, synchronizer);
 
-		trace("Wait until the ManagedService has gotten the update");
+		System.out.println("Wait until the ManagedService has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props = synchronizer.getProps();
-		assertEquals("val", props.get("key"));
+		assertThat(props.get("key")).isEqualTo("val");
 		verifyPlugins(props, false, Arrays.asList(1, 2), Arrays.asList(1, 2),
 				context);
 	}
@@ -367,6 +370,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	/**
 	 * Test targetting of configuration plugins with a managed service factory
 	 */
+	@Test
 	public void testTargettingManagedServiceFactory() throws Exception {
 		// create factory configuration
 		final String factoryPid = Util.createPid("msfpid");
@@ -382,12 +386,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		final SynchronizerImpl synchronizer = new SynchronizerImpl();
 		registerManagedServiceFactory(factoryPid, synchronizer);
 
-		trace("Wait until the ManagedServiceFactory has gotten the update");
+		System.out.println("Wait until the ManagedServiceFactory has gotten the update");
 
-		assertTrue("Update done",
-				synchronizer.waitForSignal(SIGNAL_WAITING_TIME));
+		assertThat(synchronizer.waitForSignal(SIGNAL_WAITING_TIME)).as("Update done").isTrue();
 		final Dictionary<String,Object> props = synchronizer.getProps();
-		assertEquals("val", props.get("key"));
+		assertThat(props.get("key")).isEqualTo("val");
 		verifyPlugins(props, true, Arrays.asList(1, 2), Arrays.asList(1, 2),
 				context);
 	}
@@ -395,6 +398,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	/**
 	 * Test calling plugins through Configuration object
 	 */
+	@Test
 	public void testGetProcessedProperties() throws Exception {
 		// create configuration
 		final String pid = Util.createPid("mspid");
@@ -409,7 +413,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		createConfigurationPlugin(context, 4, 1000, null);
 		createConfigurationPlugin(context, 5, 1001, null);
 
-		final ServiceRegistration<ManagedService> reg = this.getContext()
+		final ServiceRegistration<ManagedService> reg = this.context
 				.registerService(ManagedService.class, new ManagedService() {
 
 					@Override
@@ -423,7 +427,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 		try {
 			final Dictionary<String,Object> props = conf
 					.getProcessedProperties(reg.getReference());
-			assertEquals("val", props.get("key"));
+			assertThat(props.get("key")).isEqualTo("val");
 
 			verifyPlugins(props, false, Arrays.asList(1, 2, 3, 4, 5),
 					Arrays.asList(2, 3, 4), context);
@@ -448,19 +452,16 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 			final PluginContext context) {
 
 		if (context.pid != null) {
-			assertEquals(context.pid, props.get(Constants.SERVICE_PID));
+			assertThat(props.get(Constants.SERVICE_PID)).isEqualTo(context.pid);
 		}
 		if (context.factoryPid != null) {
-			assertEquals(context.factoryPid,
-					props.get(ConfigurationAdmin.SERVICE_FACTORYPID));
+			assertThat(props.get(ConfigurationAdmin.SERVICE_FACTORYPID)).isEqualTo(context.factoryPid);
 		}
-		assertNull(props.get(ConfigurationAdmin.SERVICE_BUNDLELOCATION));
-		assertEquals(
-				"Order expected=" + callOrder + ", but was "
-						+ context.invocationOrder,
-				callOrder, context.invocationOrder);
+		assertThat(props.get(ConfigurationAdmin.SERVICE_BUNDLELOCATION)).isNull();
+		assertThat(context.invocationOrder).as("Order expected=" + callOrder + ", but was "
+						+ context.invocationOrder).isEqualTo(callOrder);
 
-		assertTrue("Errors: " + context.errors, context.errors.isEmpty());
+		assertThat(context.errors.isEmpty()).as("Errors: " + context.errors).isTrue();
 
 		final Set<Integer> modifications = new HashSet<>();
 		Enumeration<String> keyEnum = props.keys();
@@ -472,8 +473,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 				}
 				final Integer id = Integer
 						.valueOf(key.substring(PROP_MSF_PREFIX.length()));
-				assertTrue("No modification from plugin " + id + " expected.",
-						modifyOrder.contains(id));
+				assertThat(modifyOrder.contains(id)).as("No modification from plugin " + id + " expected.").isTrue();
 				modifications.add(id);
 			} else if (key.startsWith(PROP_MS_PREFIX)) {
 				if (isFactory) {
@@ -481,13 +481,11 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 				}
 				final Integer id = Integer
 						.valueOf(key.substring(PROP_MS_PREFIX.length()));
-				assertTrue("No modification from plugin " + id + " expected.",
-						modifyOrder.contains(id));
+				assertThat(modifyOrder.contains(id)).as("No modification from plugin " + id + " expected.").isTrue();
 				modifications.add(id);
 			}
 		}
-		assertTrue("Expected " + modifyOrder + ", got: " + modifications,
-				modifications.equals(new HashSet<>(modifyOrder)));
+		assertThat(modifications.equals(new HashSet<>(modifyOrder))).as("Expected " + modifyOrder + ", got: " + modifications).isTrue();
 	}
 
 	/**
@@ -499,7 +497,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	 */
 	private void registerManagedService(final String pid,
 			final Synchronizer synchronizer) throws Exception {
-		trace("Create and register a new ManagedService");
+		System.out.println("Create and register a new ManagedService");
 
 		registerService(ManagedService.class.getName(), new ManagedService() {
 
@@ -521,7 +519,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	 */
 	private void registerManagedServiceFactory(final String factoryPid,
 			final Synchronizer synchronizer) throws Exception {
-		trace("Create and register a new ManagedServiceFactory");
+		System.out.println("Create and register a new ManagedServiceFactory");
 
 		registerService(ManagedServiceFactory.class.getName(),
 				new ManagedServiceFactory() {
@@ -580,7 +578,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 	private void createConfigurationPlugin(final PluginContext context, int id,
 			Object ranking,
 			String[] pids) throws Exception {
-		trace("Create and register a new ConfigurationPlugin");
+		System.out.println("Create and register a new ConfigurationPlugin");
 		Dictionary<String,Object> props = new Hashtable<>();
 		if (ranking != null) {
 			props.put(ConfigurationPlugin.CM_RANKING, ranking);
@@ -639,7 +637,7 @@ public class ConfigurationPluginTests extends DefaultTestBundleControl {
 
 		public void modifyConfiguration(ServiceReference< ? > ref,
 				Dictionary<String,Object> props) {
-			trace("Calling plugin with cmRanking=" + ranking);
+			System.out.println("Calling plugin with cmRanking=" + ranking);
 			// add to invocation order
 			this.context.invocationOrder.add(id);
 			// set prop
