@@ -31,11 +31,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.framework.ServiceReference;
 import org.osgi.framework.ServiceRegistration;
+import org.osgi.service.cm.Configuration;
 import org.osgi.test.common.annotation.InjectAwaitCalm;
 import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.await.AwaitCalm;
@@ -77,6 +80,7 @@ public abstract class CMTestSupport {
 	}
 
 	static final long	SETTLE_QUIET_MILLIS	= 300;
+	static final long	POLL_MILLIS			= 50;
 
 	@InjectAwaitCalm
 	protected AwaitCalm	awaitCalm;
@@ -93,6 +97,23 @@ public abstract class CMTestSupport {
 			awaitCalm.waitForQuiet(quiet, Duration.ofMillis(maxMillis));
 		} catch (AwaitCalmTimeoutException e) {
 			// still busy after maxMillis: go on, as the fixed sleep did
+		}
+	}
+
+	/**
+	 * Waits until the location of the configuration matches, at the latest
+	 * after maxMillis, as the former sleep did. Configuration Admin binds and
+	 * unbinds a location without a framework event, so settle() can return
+	 * before it is done; the assertion that follows checks the location.
+	 */
+	public void awaitBundleLocation(Configuration conf,
+			Predicate<String> expected, long maxMillis)
+			throws InterruptedException {
+		long deadline = System.nanoTime()
+				+ TimeUnit.MILLISECONDS.toNanos(maxMillis);
+		while (!expected.test(conf.getBundleLocation())
+				&& System.nanoTime() - deadline < 0) {
+			Thread.sleep(POLL_MILLIS);
 		}
 	}
 

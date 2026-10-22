@@ -35,6 +35,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.PropertyPermission;
 import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
@@ -1517,7 +1518,7 @@ public class CMControl extends CMTestSupport {
 			 * location must be reset to null.
 			 */
 			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			settle(SIGNAL_WAITING_TIME);
+			awaitBundleLocation(conf, Objects::isNull, SIGNAL_WAITING_TIME);
 			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED)").isNull();
 		} finally {
 			if (reg != null)
@@ -1558,7 +1559,7 @@ public class CMControl extends CMTestSupport {
 			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
 			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			settle(SIGNAL_WAITING_TIME);
+			awaitBundleLocation(conf, Objects::isNull, SIGNAL_WAITING_TIME);
 			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED)").isNull();
 		} finally {
 			if (reg != null)
@@ -1592,7 +1593,7 @@ public class CMControl extends CMTestSupport {
 			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
 			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			settle(SIGNAL_WAITING_TIME);
+			awaitBundleLocation(conf, Objects::isNull, SIGNAL_WAITING_TIME);
 			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED)").isNull();
 		} finally {
 			if (reg != null)
@@ -1634,7 +1635,8 @@ public class CMControl extends CMTestSupport {
 			settle(SIGNAL_WAITING_TIME);
 			bundle1.uninstall();
 			System.out.println("Target Bundle is uninstalled. Wait for a while to check unbound.");
-			settle(SIGNAL_WAITING_TIME);
+			// the location must not change: no event to wait for, wait the full time
+			Thread.sleep(SIGNAL_WAITING_TIME);
 			assertThat(conf.getBundleLocation()).as("No more Dynamic binding(UNINSTALLED)").isEqualTo(bundle1.getLocation());
 		} finally {
 			if (reg != null)
@@ -1679,7 +1681,8 @@ public class CMControl extends CMTestSupport {
 
 			restartCM();
 
-			settle(SIGNAL_WAITING_TIME * 2);
+			// the location must not change: no event to wait for, wait the full time
+			Thread.sleep(SIGNAL_WAITING_TIME * 2);
 			Configuration[] confs = cm.listConfigurations(null);
 			assertThat(confs).as("confs must NOT be empty:").isNotNull();
 			assertThat(confs.length - existingConfigs.size()).as("confs.length must be one").isOne();
@@ -1746,6 +1749,7 @@ public class CMControl extends CMTestSupport {
             for (int i = 0; i < confs.length; i++) {
                 conf = confs[i];
                 if (!existingConfigs.contains(conf.getPid())) {
+                    awaitBundleLocation(conf, Objects::isNull, SIGNAL_WAITING_TIME * 2);
                     System.out.println("confs[" + i + "].getBundleLocation()=" + confs[i].getBundleLocation());
                     assertThat(confs[i].getBundleLocation()).as("Dynamic binding(UNINSTALLED):confs[" + i + "].getBundleLocation() must be null").isEqualTo(null);
                 }
@@ -1800,6 +1804,7 @@ public class CMControl extends CMTestSupport {
 			cm = getService(ConfigurationAdmin.class);
 			settle(SIGNAL_WAITING_TIME * 2);
 			conf = cm.getConfiguration(bundlePid, null);
+			awaitBundleLocation(conf, Objects::isNull, SIGNAL_WAITING_TIME * 2);
 			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED): Must be reset to null").isEqualTo(null);
 			conf = cm.getConfiguration(bundlePid);
 			assertThat(conf.getBundleLocation()).as("Dynamic binding(UNINSTALLED): Must be Re-bound").isEqualTo(context.getBundle().getLocation());
@@ -7007,7 +7012,7 @@ public class CMControl extends CMTestSupport {
 			props.put("StringKey", "stringvalue");
 			System.out.println("The configuration is being updated ");
 			conf.update(props);
-			settle(3000);
+			awaitBundleLocation(conf, Objects::nonNull, 3000);
 
 			if(conf.getBundleLocation().equals(bundleT1.getLocation())){
 				count1_1 = assertCallback(sync1_1, count1_1);
@@ -8282,7 +8287,7 @@ public class CMControl extends CMTestSupport {
 			this.printoutPermissions();
 			props.put("StringKey", "stringvalue");
 			conf.update(props);
-			settle(1000);
+			awaitBundleLocation(conf, Objects::nonNull, 1000);
 			if(conf.getBundleLocation().equals(bundleT1.getLocation())){
 				System.out.println("Wait for signal.");
 				count1_1 = assertCallback(sync1_1, count1_1);
@@ -8293,7 +8298,7 @@ public class CMControl extends CMTestSupport {
 				System.out.println("Bound bundleT1 is going to be stopped.");
 				bundleT1.stop();
 				bundleT1.uninstall();
-				settle(1000);
+				awaitBundleLocation(conf, bundleT2.getLocation()::equals, 1000);
 				assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically bound to bundleT2").isEqualTo(bundleT2.getLocation());
 				count2_1 = assertCallback(sync2_1, count2_1);
 				System.out.println("conf is going to be deleted.");
@@ -8311,7 +8316,7 @@ public class CMControl extends CMTestSupport {
 				System.out.println("Bound bundleT2 is going to be stopped.");
 				bundleT2.stop();
 				bundleT2.uninstall();
-				settle(1000);
+				awaitBundleLocation(conf, bundleT1.getLocation()::equals, 1000);
 				assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically bound to bundleT1").isEqualTo(bundleT1.getLocation());
 				count1_1 = assertCallback(sync1_1, count1_1);
 				assertThat(sync1_1.getProps()).as("called back with Non-null props").isNotNull();
@@ -8408,7 +8413,7 @@ public class CMControl extends CMTestSupport {
 			System.out.println("Bound bundleT1 is going to be stopped.");
 			bundleT1.stop();
 			bundleT1.uninstall();
-			settle(1000);
+			awaitBundleLocation(conf, Objects::isNull, 1000);
 			assertThat(conf.getBundleLocation()).as("The location of the conf must be dynamically unbound to null.").isNull();
 		} finally {
 			cleanUpForCallbackTest(null, null, null, list);
