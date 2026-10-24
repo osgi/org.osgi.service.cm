@@ -19,12 +19,15 @@ package org.osgi.test.cases.cm.junit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -393,8 +396,11 @@ public class CMCoordinationTestCase extends CMTestSupport {
 	public void testCoordinatedConfigurationOnBeforeRegisteredManagedService()
 			throws Exception {
 
-		final List<Boolean> events = new ArrayList<>();
-		final String pid = this.getClass().getName() + ".mstestpid3";
+		// written by the Configuration Admin thread, read by the test
+		final List<Boolean> events = new CopyOnWriteArrayList<>();
+		// completed by the first callback only
+		final CompletableFuture<Boolean> initial = new CompletableFuture<>();
+		final String pid = this.getClass().getName() + ".mstestpid4";
 		// add managed service
 		final Dictionary<String,Object> msProps = new Hashtable<>();
 		msProps.put(Constants.SERVICE_PID, pid);
@@ -406,9 +412,16 @@ public class CMCoordinationTestCase extends CMTestSupport {
 					public void updated(Dictionary<String, ? > properties)
 							throws ConfigurationException {
 						events.add(properties != null);
+						initial.complete(properties != null);
 					}
 
 				}, msProps);
+
+		// the Managed Service is registered before the coordination: its
+		// asynchronous updated(null) comes first, there is no configuration
+		assertThat(initial)
+				.succeedsWithin(Duration.ofMillis(SIGNAL_WAITING_TIME))
+				.isEqualTo(false);
 
 		// start a coordination
 		final Coordinator c = this.getService(Coordinator.class);
