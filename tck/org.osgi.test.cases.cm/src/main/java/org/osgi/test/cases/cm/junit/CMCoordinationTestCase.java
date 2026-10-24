@@ -410,6 +410,11 @@ public class CMCoordinationTestCase extends CMTestSupport {
 
 				}, msProps);
 
+		sleep();
+		assertThat(events).as("Initial ManagedService#updated call missing")
+				.hasSize(1);
+		assertThat(events.get(0)).as("properties must be null").isFalse();
+
 		// start a coordination
 		final Coordinator c = this.getService(Coordinator.class);
 		final Coordination coord = c.begin("cm-test2", 0);
@@ -424,29 +429,35 @@ public class CMCoordinationTestCase extends CMTestSupport {
 			conf.update(props);
 
 			sleep();
-			assertThat(events).hasSize(1);// update with null because
-											// registered before coordination
+			assertThat(events).as(
+					"Event was delivered during coordination after creation of configuration")
+					.hasSize(1);
 
 			// update configuration
 			props.put("key2", "value2");
 			conf.update(props);
 
 			sleep();
-			assertThat(events).hasSize(1);
+			assertThat(events).as(
+					"Event was delivered during coordination after updating configuration")
+					.hasSize(1);
 
 			// delete configuration
 			conf.delete();
 
 			sleep();
-			assertThat(events).hasSize(1);
+			assertThat(events).as(
+					"Event was delivered during coordination after delete configuration")
+					.hasSize(1);
 		} finally {
 			coord.end();
 		}
 
 		// wait and verify listener
 		sleep();
-		assertThat(events).hasSize(1);
-		assertThat(events.get(0)).isFalse();
+		assertThat(events).as("Collapsed event from coordination is missing")
+				.hasSize(2);
+		assertThat(events.get(1)).as("properties must be null").isFalse();
 	}
 
 	/**
